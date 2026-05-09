@@ -172,6 +172,7 @@
     <script>
         let map, userMarker, destMarker, routingControl, radarLayer;
         let userPos = null;
+        let destinationLatLng = null;
         let rotation = 0;
         let isNavigating = false;
         let currentSpeed = 0;
@@ -253,7 +254,12 @@
 
                 if(isNavigating && !isCameraFree) adjustZoom();
                 animate(coords, pos.coords.heading || 0);
-                if (isNavigating) updateNavigation();
+                
+                if (isNavigating) {
+                    updateNavigation();
+                    // IMPORTANTE: Atualiza o trajeto para remover o que já foi percorrido
+                    updatePathProgress();
+                }
             }, null, { enableHighAccuracy: true });
         }
 
@@ -270,6 +276,17 @@
                     }).addTo(radarLayer);
                 });
             } catch(e) {}
+        }
+
+        function updatePathProgress() {
+            if (!isNavigating || !destinationLatLng || !routingControl) return;
+            
+            // Re-calcula a rota do ponto atual do usuário até o destino
+            // Isso faz com que a linha de navegação se "encurte" conforme o usuário anda
+            routingControl.setWaypoints([
+                L.latLng(userPos[0], userPos[1]),
+                destinationLatLng
+            ]);
         }
 
         function updateNavigation() {
@@ -378,6 +395,7 @@
 
         function setDest(latlng) {
             if (destMarker) map.removeLayer(destMarker);
+            destinationLatLng = latlng;
             destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
             document.getElementById('trip-card').classList.add('active');
             
@@ -411,6 +429,7 @@
             document.getElementById('trip-card').classList.remove('active');
             routingControl = null;
             destMarker = null;
+            destinationLatLng = null;
         }
 
         function toggleNav(start) {
