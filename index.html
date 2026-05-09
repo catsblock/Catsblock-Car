@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CatsBlock Car</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        :root {
+            --accent: #A855F7;
+            --surface: rgba(18, 18, 20, 0.98);
+            --bg-dark: #000000;
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%; width: 100%;
+            background-color: var(--bg-dark);
+            color: #ffffff; font-family: 'Inter', sans-serif;
+            overflow: hidden; touch-action: none;
+        }
+
+        #viewport { width: 100%; height: 100%; perspective: 1200px; overflow: hidden; background: #000; }
+        #map { height: 100%; width: 100%; z-index: 1; transition: transform 0.8s cubic-bezier(0.2, 0, 0.2, 1); }
+
+        .map-3d-active { transform: rotateX(55deg) translateY(-15%) scale(2.4); transform-origin: bottom center; }
+
+        .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
+        .ui-container * { pointer-events: auto; }
+        .top-ui { top: 20px; }
+        .bottom-ui { bottom: 25px; display: none; opacity: 0; transition: all 0.5s ease; }
+        .bottom-ui.active { display: block; opacity: 1; }
+
+        .glass-card {
+            background: var(--surface); backdrop-filter: blur(25px);
+            border-radius: 28px; padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+        }
+
+        #instruction-panel {
+            display: none; align-items: center; gap: 15px;
+            background: var(--accent); color: white; padding: 20px;
+            border-radius: 24px; margin-bottom: 12px;
+            box-shadow: 0 10px 30px rgba(168, 85, 247, 0.3);
+        }
+
+        .btn-action {
+            background: #ffffff; color: #000000; font-weight: 800;
+            padding: 16px; border-radius: 18px; width: 100%;
+            margin-top: 15px; font-size: 15px; transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .btn-stop { background: #ff453a; color: white; }
+
+        .marker-blue { width: 22px; height: 22px; background: var(--accent); border: 3px solid white; border-radius: 50%; box-shadow: 0 0 15px var(--accent); }
+        .radar-dot { width: 16px; height: 16px; background: #ff453a; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px #ff453a; }
+        
+        .speed-badge {
+            position: absolute; right: 20px; bottom: 120px;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+            padding: 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);
+            text-align: center; min-width: 80px; z-index: 1000;
+            transition: bottom 0.5s ease;
+        }
+        .speed-nav-active { bottom: 320px; }
+
+        .leaflet-routing-container, .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
+        
+        #splash {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; text-align: center;
+        }
+
+        .search-item { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+        
+        .cost-badge {
+            background: rgba(255,255,255,0.05);
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex; flex-direction: column; justify-content: center;
+        }
+
+        .dynamic-tag { font-size: 8px; color: #A855F7; text-transform: uppercase; font-weight: 800; margin-top: 2px; }
+    </style>
+</head>
+<body>
+
+    <div id="splash">
+        <div class="mb-6 w-20 h-20 bg-purple-600 rounded-[25px] flex items-center justify-center">
+            <i data-lucide="shield-check" size="40" color="white"></i>
+        </div>
+        <h1 class="text-3xl font-black mb-4 text-white tracking-tight">CatsBlock Car</h1>
+        <div class="max-w-xs mb-10 text-zinc-400 text-sm leading-relaxed">
+            <p class="mb-4">Sua ferramenta de navegação elite com transparência total. Calcule custos de Uber, combustível e receba alertas de radares em tempo real.</p>
+            <p class="font-bold text-white italic">"Nunca vamos armazenar sua localização, você pode ver isto no código fonte que é público."</p>
+        </div>
+        <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
+    </div>
+
+    <div class="speed-badge" id="speed-ui">
+        <span class="block text-3xl font-black text-white" id="speed-val">0</span>
+        <span class="block text-[10px] text-zinc-500 font-bold uppercase">km/h</span>
+    </div>
+
+    <div class="ui-container top-ui" id="ui-top">
+        <div id="instruction-panel">
+            <div id="inst-icon" class="bg-white/20 p-3 rounded-2xl">
+                <i data-lucide="arrow-up" size="32"></i>
+            </div>
+            <div>
+                <p id="inst-dist" class="text-[10px] font-black opacity-80 uppercase tracking-widest">Aguardando...</p>
+                <p id="inst-text" class="text-xl font-black leading-tight">Siga o mapa</p>
+            </div>
+        </div>
+
+        <div class="glass-card" id="search-card">
+            <div class="flex items-center gap-3">
+                <i data-lucide="search" size="18" class="text-purple-500"></i>
+                <input type="text" placeholder="Para onde vamos?" id="dest-input" class="bg-transparent border-none outline-none text-white w-full font-medium">
+            </div>
+            <div id="results" class="mt-3 max-h-60 overflow-y-auto hidden bg-[#0c0c0e] rounded-xl border border-white/5 shadow-2xl"></div>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="map"></div>
+    </div>
+
+    <div class="ui-container bottom-ui" id="trip-card">
+        <div class="glass-card relative">
+            <button onclick="clearSelection()" class="absolute top-4 right-4 text-zinc-500 hover:text-white">
+                <i data-lucide="x" size="20"></i>
+            </button>
+            
+            <div class="mb-4 pr-8">
+                <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Destino Selecionado</p>
+                <p id="dest-name" class="text-white font-bold text-lg truncate">--</p>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <div class="cost-badge">
+                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Tempo</p>
+                    <p id="eta-val" class="text-purple-500 font-black text-lg">--</p>
+                </div>
+                <div class="cost-badge">
+                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Combustível</p>
+                    <p id="fuel-val" class="text-white font-black text-[11px] leading-tight">--</p>
+                </div>
+                <div class="cost-badge">
+                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Uber Estimado</p>
+                    <p id="uber-val" class="text-green-500 font-black text-lg">--</p>
+                    <p id="uber-tag" class="dynamic-tag"></p>
+                </div>
+            </div>
+
+            <div id="action-area">
+                <button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        let map, userMarker, destMarker, routingControl, radarLayer;
+        let userPos = null;
+        let rotation = 0;
+        let isNavigating = false;
+        let currentSpeed = 0;
+        let isCameraFree = false;
+        let cameraTimer = null;
+        let lastInstructionText = "";
+        const synth = window.speechSynthesis;
+
+        lucide.createIcons();
+
+        function formatDistance(m) {
+            if (m < 20) return "Agora";
+            if (m < 50) return "10 m";
+            if (m < 100) return "50 m";
+            if (m < 200) return "100 m";
+            if (m < 300) return "200 m";
+            if (m < 400) return "300 m";
+            if (m < 500) return "400 m";
+            if (m < 600) return "500 m";
+            if (m < 700) return "600 m";
+            if (m < 800) return "700 m";
+            if (m < 900) return "800 m";
+            if (m < 1000) return "900 m";
+            if (m < 1500) return "1 km";
+            if (m < 3000) return "1.5 km";
+            if (m < 5000) return "3 km";
+            return Math.floor(m/1000) + " km";
+        }
+
+        function speak(text) {
+            if (!isNavigating || !text) return;
+            let pt = text.toLowerCase()
+                .replace("head", "Siga")
+                .replace("turn left", "vire à esquerda")
+                .replace("turn right", "vire à direita")
+                .replace("roundabout", "rotatória")
+                .replace("destination", "destino")
+                .replace("arrived", "chegou");
+            
+            if (pt === lastInstructionText) return;
+            synth.cancel();
+            const ut = new SpeechSynthesisUtterance(pt);
+            ut.lang = 'pt-BR';
+            synth.speak(ut);
+            lastInstructionText = pt;
+        }
+
+        function unlock() {
+            navigator.geolocation.getCurrentPosition(pos => {
+                document.getElementById('splash').style.display = 'none';
+                init(pos.coords.latitude, pos.coords.longitude);
+            }, () => alert("GPS necessário para o CatsBlock Car funcionar."));
+        }
+
+        function init(lat, lng) {
+            userPos = [lat, lng];
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView(userPos, 17);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+            
+            radarLayer = L.layerGroup().addTo(map);
+            updateUserMarker(userPos, 0, false);
+            fetchRadars(lat, lng);
+
+            map.on('movestart touchstart mousedown', () => {
+                isCameraFree = true;
+                clearTimeout(cameraTimer);
+                cameraTimer = setTimeout(() => isCameraFree = false, 3000);
+            });
+
+            map.on('click', (e) => { if(!isNavigating) setDest(e.latlng); });
+
+            navigator.geolocation.watchPosition(pos => {
+                const coords = [pos.coords.latitude, pos.coords.longitude];
+                currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
+                document.getElementById('speed-val').innerText = currentSpeed;
+                
+                if (isNavigating && currentSpeed > 30) document.getElementById('map').classList.add('map-3d-active');
+                else document.getElementById('map').classList.remove('map-3d-active');
+
+                if(isNavigating && !isCameraFree) adjustZoom();
+                animate(coords, pos.coords.heading || 0);
+                if (isNavigating) updateNavigation();
+            }, null, { enableHighAccuracy: true });
+        }
+
+        async function fetchRadars(lat, lng) {
+            try {
+                const query = `[out:json];node["highway"="speed_camera"](around:5000,${lat},${lng});out;`;
+                const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                radarLayer.clearLayers();
+                data.elements.forEach(el => {
+                    L.marker([el.lat, el.lon], {
+                        icon: L.divIcon({ className: 'radar-dot' }),
+                        interactive: false
+                    }).addTo(radarLayer);
+                });
+            } catch(e) {}
+        }
+
+        function updateNavigation() {
+            if (!routingControl || !routingControl._selectedRoute || !userPos) return;
+            const route = routingControl._selectedRoute;
+            const inst = route.instructions[0];
+            const dist = inst.distance;
+            
+            const lastPoint = route.coordinates[route.coordinates.length - 1];
+            const distToFinish = map.distance(userPos, lastPoint);
+
+            if (distToFinish < 15) {
+                speak("Você chegou ao seu destino final.");
+                toggleNav(false);
+                return;
+            }
+
+            const formattedDist = formatDistance(dist);
+            let rawText = inst.text.toLowerCase().includes("head") ? "Siga em frente" : inst.text;
+
+            document.getElementById('inst-text').innerText = rawText;
+            document.getElementById('inst-dist').innerText = `EM ${formattedDist}`;
+
+            let iconName = "arrow-up";
+            if (rawText.toLowerCase().includes("esquerda")) iconName = "corner-up-left";
+            else if (rawText.toLowerCase().includes("direita")) iconName = "corner-up-right";
+            else if (rawText.toLowerCase().includes("rotatória")) iconName = "refresh-cw";
+            
+            document.getElementById('inst-icon').innerHTML = `<i data-lucide="${iconName}" size="32"></i>`;
+            lucide.createIcons();
+
+            if (dist < 200 && dist > 20) speak(rawText);
+        }
+
+        function adjustZoom() {
+            let z = 19;
+            if (currentSpeed > 90) z = 14;
+            else if (currentSpeed > 50) z = 16.5;
+            map.setZoom(z, { animate: true });
+        }
+
+        function animate(target, targetAngle) {
+            if (!userPos) { userPos = target; return; }
+            const start = userPos;
+            const startTime = performance.now();
+            function frame(now) {
+                const p = Math.min((now - startTime) / 850, 1);
+                userPos = [start[0] + (target[0]-start[0])*p, start[1] + (target[1]-start[1])*p];
+                rotation += ((targetAngle - rotation + 540) % 360 - 180) * 0.15;
+                updateUserMarker(userPos, rotation, isNavigating);
+                if (isNavigating && !isCameraFree) map.panTo(userPos, { animate: false });
+                if (p < 1) requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function updateUserMarker(coords, rot, asArrow) {
+            if (!userMarker) {
+                userMarker = L.marker(coords, {
+                    icon: L.divIcon({ className: 'custom-marker', html: `<div id="marker-inner"></div>`, iconSize: [60, 60], iconAnchor: [30, 30] })
+                }).addTo(map);
+            }
+            const inner = document.getElementById('marker-inner');
+            if (asArrow) {
+                inner.innerHTML = `<div style="transform: rotate(${rot}deg); filter: drop-shadow(0 0 10px #A855F7)"><svg width="60" height="60" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#A855F7" stroke="white" stroke-width="6" stroke-linejoin="round"/></svg></div>`;
+            } else {
+                inner.innerHTML = `<div class="marker-blue mx-auto mt-[19px]"></div>`;
+            }
+            userMarker.setLatLng(coords);
+        }
+
+        function calculateUberPrice(distKm) {
+            const now = new Date();
+            const hour = now.getHours();
+            const day = now.getDay();
+            const month = now.getMonth();
+            
+            let baseFare = 4.50; 
+            let perKm = 1.80;
+            let surgeMultiplier = 1.0;
+            let tag = "Tarifa Normal";
+
+            if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
+                surgeMultiplier = 1.4;
+                tag = "Pico (Demanda Alta)";
+            } 
+            else if (hour >= 23 || hour <= 4) {
+                surgeMultiplier = 1.2;
+                tag = "Tarifa Noturna";
+            }
+            else if (day === 0 || day === 6) {
+                surgeMultiplier = 1.1;
+                tag = "Fim de Semana";
+            }
+
+            if (month === 11 || month === 6) {
+                surgeMultiplier *= 1.1;
+                if(tag === "Tarifa Normal") tag = "Alta Temporada";
+            }
+
+            let total = (baseFare + (distKm * perKm)) * surgeMultiplier;
+            if (total < 7.50) total = 7.50 + (distKm * 0.5); 
+
+            return { total: total.toFixed(2), tag: tag };
+        }
+
+        function setDest(latlng) {
+            if (destMarker) map.removeLayer(destMarker);
+            destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
+            document.getElementById('trip-card').classList.add('active');
+            
+            if (routingControl) map.removeControl(routingControl);
+            routingControl = L.Routing.control({
+                waypoints: [L.latLng(userPos), latlng],
+                lineOptions: { styles: [{ color: 'white', opacity: 0.8, weight: 12 }, { color: '#A855F7', opacity: 1, weight: 8 }] },
+                createMarker: () => null,
+                show: false
+            }).on('routesfound', e => {
+                const route = e.routes[0];
+                const distanceKm = route.summary.totalDistance / 1000;
+                
+                document.getElementById('eta-val').innerText = Math.floor(route.summary.totalTime / 60) + "m";
+                document.getElementById('dest-name').innerText = "Local Selecionado";
+
+                const fuelNeeded = (distanceKm / 10).toFixed(2);
+                const fuelPrice = (fuelNeeded * 5.80).toFixed(2);
+                document.getElementById('fuel-val').innerText = `${fuelNeeded}L\nR$ ${fuelPrice}`;
+
+                const uberData = calculateUberPrice(distanceKm);
+                document.getElementById('uber-val').innerText = `R$ ${uberData.total}`;
+                document.getElementById('uber-tag').innerText = uberData.tag;
+            }).addTo(map);
+        }
+
+        function clearSelection() {
+            if (isNavigating) return;
+            if (routingControl) map.removeControl(routingControl);
+            if (destMarker) map.removeLayer(destMarker);
+            document.getElementById('trip-card').classList.remove('active');
+            routingControl = null;
+            destMarker = null;
+        }
+
+        function toggleNav(start) {
+            isNavigating = start;
+            document.getElementById('search-card').style.display = start ? 'none' : 'block';
+            document.getElementById('instruction-panel').style.display = start ? 'flex' : 'none';
+            document.getElementById('action-area').innerHTML = start ? 
+                `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
+                `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
+            
+            document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
+            
+            if(start) {
+                map.setZoom(20);
+                lastInstructionText = "";
+                speak("Iniciando percurso no CatsBlock Car. Siga em frente.");
+            } else {
+                clearSelection();
+                synth.cancel();
+            }
+            lucide.createIcons();
+        }
+
+        const input = document.getElementById('dest-input');
+        input.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const res = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(input.value)}&maxLocations=5&outFields=Match_addr&countryCode=BRA`);
+                const data = await res.json();
+                const box = document.getElementById('results');
+                box.innerHTML = ''; box.classList.remove('hidden');
+                data.candidates.forEach(c => {
+                    const d = document.createElement('div');
+                    d.className = 'search-item text-white text-sm hover:bg-white/5 transition-all';
+                    d.innerText = c.address;
+                    d.onclick = () => {
+                        box.classList.add('hidden');
+                        setDest(L.latLng(c.location.y, c.location.x));
+                        map.flyTo([c.location.y, c.location.x], 17);
+                    };
+                    box.appendChild(d);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
