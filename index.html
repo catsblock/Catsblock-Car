@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CatsBlock Car</title>
-    <meta name="description" content="Sua ferramenta de navegação elite com transparência total. Calcule custos de Uber, combustível e receba alertas de radares em tempo real.">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -86,17 +85,17 @@
             border-radius: 12px;
             border: 1px solid rgba(255,255,255,0.05);
             display: flex; flex-direction: column; justify-content: center;
-            transition: all 0.3s ease;
         }
 
-        .costs-hidden { display: none !important; }
-        .dynamic-tag { font-size: 8px; color: #A855F7; text-transform: uppercase; font-weight: 800; margin-top: 2px; }
+        .mode-btn { 
+            background: rgba(255,255,255,0.05); padding: 10px; border-radius: 14px; 
+            transition: all 0.2s; color: #71717a; border: 1px solid transparent;
+        }
+        .mode-btn.active { background: #A855F7; color: white; }
 
         .arrow-wrapper {
             width: 36px; height: 36px;
-            background: #A855F7;
-            border: 3px solid white;
-            border-radius: 50%;
+            background: #A855F7; border: 3px solid white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
             transition: transform 0.2s linear;
@@ -105,6 +104,7 @@
 </head>
 <body>
 
+    <!-- Splash Restaurado com Descrições -->
     <div id="splash">
         <div class="mb-6 w-20 h-20 bg-purple-600 rounded-[25px] flex items-center justify-center">
             <i data-lucide="shield-check" size="40" color="white"></i>
@@ -112,7 +112,7 @@
         <h1 class="text-3xl font-black mb-4 text-white tracking-tight">CatsBlock Car</h1>
         <div class="max-w-xs mb-10 text-zinc-400 text-sm leading-relaxed">
             <p class="mb-4">Sua ferramenta de navegação elite com transparência total. Calcule custos de Uber, combustível e receba alertas de radares em tempo real.</p>
-            <p class="font-bold text-white italic">"Nunca vamos armazenar sua localização. Você pode ver isto no código fonte."</p>
+            <p class="font-bold text-white italic">"Nunca vamos armazenar sua localização. você pode verificar no código fonte."</p>
         </div>
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
     </div>
@@ -149,32 +149,33 @@
     <div class="ui-container bottom-ui" id="trip-card">
         <div class="glass-card relative">
             <div class="absolute top-4 right-4 flex gap-3">
-                <button id="toggle-info-btn" class="text-zinc-500 hover:text-white transition-colors">
-                    <i data-lucide="eye" size="20"></i>
-                </button>
                 <button onclick="clearSelection()" class="text-zinc-500 hover:text-white">
                     <i data-lucide="x" size="20"></i>
                 </button>
             </div>
             
+            <!-- Oculta seletor de transporte ao navegar -->
+            <div id="mode-selector" class="flex justify-between gap-2 mb-4 pr-10">
+                <button onclick="setTravelMode('car')" class="mode-btn active" id="mode-car"><i data-lucide="car" size="18"></i></button>
+                <button onclick="setTravelMode('uber')" class="mode-btn" id="mode-uber"><i data-lucide="smartphone" size="18"></i></button>
+                <button onclick="setTravelMode('bus')" class="mode-btn" id="mode-bus"><i data-lucide="bus" size="18"></i></button>
+                <button onclick="setTravelMode('bike')" class="mode-btn" id="mode-bike"><i data-lucide="bike" size="18"></i></button>
+                <button onclick="setTravelMode('walk')" class="mode-btn" id="mode-walk"><i data-lucide="person-standing" size="18"></i></button>
+            </div>
+
             <div class="mb-4 pr-16">
-                <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Destino Selecionado</p>
+                <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Destino</p>
                 <p id="dest-name" class="text-white font-bold text-lg truncate">--</p>
             </div>
 
-            <div id="cost-grid" class="grid grid-cols-3 gap-3 mb-4">
+            <div id="cost-grid" class="grid grid-cols-2 gap-3 mb-4">
                 <div class="cost-badge">
-                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Tempo</p>
+                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Tempo Est.</p>
                     <p id="eta-val" class="text-purple-500 font-black text-lg">--</p>
                 </div>
-                <div class="cost-badge">
-                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Combustível</p>
-                    <p id="fuel-val" class="text-white font-black text-[11px] leading-tight">--</p>
-                </div>
-                <div class="cost-badge">
-                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Uber Est.</p>
-                    <p id="uber-val" class="text-green-500 font-black text-lg">--</p>
-                    <p id="uber-tag" class="dynamic-tag"></p>
+                <div class="cost-badge" id="extra-info-box">
+                    <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1" id="extra-info-label">Combustível</p>
+                    <p id="extra-info-val" class="text-white font-black text-lg leading-tight">--</p>
                 </div>
             </div>
 
@@ -195,115 +196,94 @@
         let rotation = 0;
         let isNavigating = false;
         let currentSpeed = 0;
-        let isCameraFree = false;
-        let cameraTimer = null;
-        let lastInstructionText = "";
-        let infoHidden = false;
+        let travelMode = 'car';
+        let userInteracting = false;
+        let interactionTimer = null;
         const synth = window.speechSynthesis;
 
         lucide.createIcons();
-
-        document.getElementById('toggle-info-btn').onclick = () => {
-            infoHidden = !infoHidden;
-            document.getElementById('cost-grid').classList.toggle('costs-hidden', infoHidden);
-            const icon = document.getElementById('toggle-info-btn').querySelector('i');
-            icon.setAttribute('data-lucide', infoHidden ? 'eye-off' : 'eye');
-            lucide.createIcons();
-        };
-
-        function translateInstruction(text) {
-            let t = text.toLowerCase();
-            if (t.includes("head") || t.includes("straight")) return "Siga em frente";
-            if (t.includes("turn left")) return "Gire à esquerda";
-            if (t.includes("turn right")) return "Gire à direita";
-            if (t.includes("slight left")) return "Mantenha-se à esquerda";
-            if (t.includes("slight right")) return "Mantenha-se à direita";
-            if (t.includes("roundabout")) return "Na rotatória, use a saída";
-            if (t.includes("destination")) return "Você chegará ao destino";
-            return text;
-        }
-
-        function speak(text) {
-            if (!isNavigating || !text) return;
-            let pt = translateInstruction(text);
-            if (pt === lastInstructionText) return;
-            synth.cancel();
-            const ut = new SpeechSynthesisUtterance(pt);
-            ut.lang = 'pt-BR';
-            synth.speak(ut);
-            lastInstructionText = pt;
-        }
 
         function unlock() {
             navigator.geolocation.getCurrentPosition(pos => {
                 document.getElementById('splash').style.display = 'none';
                 init(pos.coords.latitude, pos.coords.longitude);
-            }, () => alert("GPS necessário."));
+            }, () => alert("GPS necessário para navegação."));
         }
 
         function init(lat, lng) {
             userPos = [lat, lng];
-            map = L.map('map', { 
-                zoomControl: false, 
-                attributionControl: false,
-                rotate: true,
-                touchRotate: true 
-            }).setView(userPos, 19);
-
+            map = L.map('map', { zoomControl: false, attributionControl: false, rotate: true, touchRotate: true }).setView(userPos, 19);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
             radarLayer = L.layerGroup().addTo(map);
             updateUserMarker(userPos, 0, false);
             fetchRadars(lat, lng);
 
-            const resetInteraction = () => {
-                isCameraFree = true;
-                clearTimeout(cameraTimer);
-                cameraTimer = setTimeout(() => {
-                    isCameraFree = false;
+            // Timer de 3 segundos para retomar foco
+            const handleInteraction = () => {
+                userInteracting = true;
+                clearTimeout(interactionTimer);
+                interactionTimer = setTimeout(() => {
+                    userInteracting = false;
                 }, 3000);
             };
 
-            map.on('movestart touchstart mousedown wheel', resetInteraction);
-            map.on('click', (e) => { if(!isNavigating) setDest(e.latlng); });
+            map.on('movestart touchstart mousedown wheel', handleInteraction);
 
             navigator.geolocation.watchPosition(pos => {
                 const coords = [pos.coords.latitude, pos.coords.longitude];
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
                 
-                if (isNavigating) {
+                if (isNavigating && !userInteracting) {
                     if (currentSpeed > 30) document.getElementById('map').classList.add('map-3d-active');
                     else document.getElementById('map').classList.remove('map-3d-active');
-                    
-                    if (routingControl && routingControl._selectedRoute) {
-                        const route = routingControl._selectedRoute;
-                        const nextPoint = route.coordinates[5] || route.coordinates[1]; 
-                        if (nextPoint) {
-                             const angle = Math.atan2(nextPoint.lat - userPos[0], nextPoint.lng - userPos[1]) * 180 / Math.PI;
-                             rotation = 90 - angle;
-                        }
-                    }
-                } else if (prevPos) {
-                    const dist = map.distance(prevPos, coords);
-                    if (dist > 1.2) {
-                        const angle = Math.atan2(coords[0] - prevPos[0], coords[1] - prevPos[1]) * 180 / Math.PI;
-                        rotation = 90 - angle;
-                    }
                 }
-
+                
                 animate(coords);
-                if (isNavigating) {
-                    updateNavigation();
-                    updatePathProgress();
-                }
+                if (isNavigating) updateNavigation();
                 prevPos = coords;
             }, null, { enableHighAccuracy: true });
+
+            map.on('click', (e) => { if(!isNavigating) setDest(e.latlng); });
         }
 
-        function getAutoZoomValue() {
-            if (currentSpeed <= 35) return 19;
-            const t = Math.min(Math.max((currentSpeed - 35) / (150 - 35), 0), 1);
-            return 19 - (t * 4.5); 
+        function setTravelMode(mode) {
+            travelMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('mode-' + mode).classList.add('active');
+            if (destinationLatLng) setDest(destinationLatLng);
+        }
+
+        function animate(target) {
+            if (!userPos) { userPos = target; return; }
+            const start = userPos;
+            const startTime = performance.now();
+            function frame(now) {
+                const p = Math.min((now - startTime) / 850, 1);
+                userPos = [start[0] + (target[0]-start[0])*p, start[1] + (target[1]-start[1])*p];
+                
+                if (prevPos && !userInteracting) {
+                    const angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
+                    rotation = 90 - angle;
+                }
+
+                updateUserMarker(userPos, rotation, isNavigating);
+
+                if (isNavigating && !userInteracting) {
+                    map.setView(userPos, 19);
+                }
+                if (p < 1) requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function updateUserMarker(coords, rot, asArrow) {
+            if (!userMarker) userMarker = L.marker(coords, { icon: L.divIcon({ className: '', html: '<div id="marker-inner"></div>', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map);
+            const inner = document.getElementById('marker-inner');
+            inner.innerHTML = asArrow ? 
+                `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="20" height="20" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
+                `<div class="marker-blue mx-auto mt-[11px]"></div>`;
+            userMarker.setLatLng(coords);
         }
 
         async function fetchRadars(lat, lng) {
@@ -318,100 +298,6 @@
             } catch(e) {}
         }
 
-        function updatePathProgress() {
-            if (!isNavigating || !destinationLatLng || !routingControl) return;
-            routingControl.setWaypoints([L.latLng(userPos[0], userPos[1]), destinationLatLng]);
-        }
-
-        function updateNavigation() {
-            if (!routingControl || !routingControl._selectedRoute || !userPos) return;
-            const route = routingControl._selectedRoute;
-            
-            // LOGICA SOLICITADA: Menos de 10 metros e tem "Vá a frente", pula para a proxima instrução importante
-            let instIndex = 0;
-            let inst = route.instructions[instIndex];
-            
-            if (inst.distance < 10 && (inst.text.toLowerCase().includes("head") || inst.text.toLowerCase().includes("straight"))) {
-                if (route.instructions.length > 1) {
-                    instIndex = 1;
-                    inst = route.instructions[instIndex];
-                }
-            }
-            
-            const dist = inst.distance;
-            const lastPoint = route.coordinates[route.coordinates.length - 1];
-            if (map.distance(userPos, lastPoint) < 15) {
-                speak("Você chegou.");
-                toggleNav(false);
-                return;
-            }
-
-            const rawText = translateInstruction(inst.text);
-            document.getElementById('inst-text').innerText = rawText;
-            document.getElementById('inst-dist').innerText = `EM ${Math.round(dist)} m`;
-
-            let iconName = "arrow-up";
-            if (rawText.includes("esquerda")) iconName = "corner-up-left";
-            else if (rawText.includes("direita")) iconName = "corner-up-right";
-            
-            document.getElementById('inst-icon').innerHTML = `<i data-lucide="${iconName}" size="32"></i>`;
-            lucide.createIcons();
-
-            if (dist < 150) speak(inst.text);
-        }
-
-        function animate(target) {
-            if (!userPos) { userPos = target; return; }
-            const start = userPos;
-            const startTime = performance.now();
-            const duration = 850; 
-
-            function frame(now) {
-                const p = Math.min((now - startTime) / duration, 1);
-                const currentLat = start[0] + (target[0] - start[0]) * p;
-                const currentLng = start[1] + (target[1] - start[1]) * p;
-                userPos = [currentLat, currentLng];
-
-                updateUserMarker(userPos, rotation, isNavigating);
-                
-                if (isNavigating && !isCameraFree) {
-                    const targetZoom = getAutoZoomValue();
-                    map.setView(userPos, targetZoom, {
-                        animate: true,
-                        duration: 0.25 
-                    });
-                }
-                
-                if (p < 1) requestAnimationFrame(frame);
-            }
-            requestAnimationFrame(frame);
-        }
-
-        function updateUserMarker(coords, rot, asArrow) {
-            if (!userMarker) {
-                userMarker = L.marker(coords, {
-                    icon: L.divIcon({ 
-                        className: 'custom-marker', 
-                        html: `<div id="marker-inner"></div>`, 
-                        iconSize: [40, 40], 
-                        iconAnchor: [20, 20] 
-                    })
-                }).addTo(map);
-            }
-            const inner = document.getElementById('marker-inner');
-            if (asArrow) {
-                inner.innerHTML = `
-                    <div class="arrow-wrapper" style="transform: rotate(${rot}deg);">
-                        <svg width="20" height="20" viewBox="0 0 100 100">
-                            <path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white" stroke="white" stroke-width="2" stroke-linejoin="round"/>
-                        </svg>
-                    </div>`;
-            } else {
-                inner.innerHTML = `<div class="marker-blue mx-auto mt-[11px]"></div>`;
-            }
-            userMarker.setLatLng(coords);
-        }
-
         function setDest(latlng) {
             if (destMarker) map.removeLayer(destMarker);
             destinationLatLng = latlng;
@@ -419,33 +305,63 @@
             document.getElementById('trip-card').classList.add('active');
             
             if (routingControl) map.removeControl(routingControl);
+            
+            const profiles = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' };
+
             routingControl = L.Routing.control({
                 waypoints: [L.latLng(userPos), latlng],
+                router: L.Routing.osrmv1({ 
+                    serviceUrl: 'https://router.project-osrm.org/route/v1', 
+                    profile: profiles[travelMode] 
+                }),
                 lineOptions: { styles: [{ color: 'white', opacity: 0.8, weight: 12 }, { color: '#A855F7', opacity: 1, weight: 8 }] },
                 createMarker: () => null,
                 show: false
             }).on('routesfound', e => {
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
-                document.getElementById('eta-val').innerText = Math.floor(route.summary.totalTime / 60) + "m";
-                document.getElementById('fuel-val').innerText = `R$ ${(dKm/10*5.8).toFixed(2)}`;
-                document.getElementById('uber-val').innerText = `R$ ${(4.5 + dKm*1.8 * (new Date().getHours() > 17 ? 1.4 : 1.0)).toFixed(2)}`;
-                document.getElementById('dest-name').innerText = "Destino Selecionado";
-            }).addTo(map);
-        }
+                
+                // CÁLCULO DE TEMPO CORRIGIDO POR MODAL
+                let minutes;
+                if (travelMode === 'walk') {
+                    minutes = Math.round((dKm / 5) * 60); // 5km/h médio
+                } else if (travelMode === 'bike') {
+                    minutes = Math.round((dKm / 15) * 60); // 15km/h médio
+                } else if (travelMode === 'bus') {
+                    minutes = Math.round((route.summary.totalTime / 60) * 1.3); // Tráfego + Paragens
+                } else {
+                    minutes = Math.floor(route.summary.totalTime / 60); // OSRM Driving
+                }
 
-        function clearSelection() {
-            if (isNavigating) return;
-            if (routingControl) map.removeControl(routingControl);
-            if (destMarker) map.removeLayer(destMarker);
-            document.getElementById('trip-card').classList.remove('active');
-            routingControl = null; destMarker = null; destinationLatLng = null;
+                document.getElementById('eta-val').innerText = minutes + "m";
+                document.getElementById('dest-name').innerText = "Destino Selecionado";
+
+                const extraBox = document.getElementById('extra-info-box');
+                const extraLabel = document.getElementById('extra-info-label');
+                const extraVal = document.getElementById('extra-info-val');
+
+                if (travelMode === 'uber') {
+                    extraBox.style.display = 'flex';
+                    extraLabel.innerText = "Uber Est.";
+                    extraVal.innerText = `R$ ${(6.5 + dKm * 2.1).toFixed(2)}`;
+                    extraVal.className = "text-green-500 font-black text-lg";
+                } else if (travelMode === 'car') {
+                    extraBox.style.display = 'flex';
+                    extraLabel.innerText = "Combustível";
+                    extraVal.innerText = `R$ ${(dKm/10*5.85).toFixed(2)}`;
+                    extraVal.className = "text-white font-black text-lg";
+                } else {
+                    extraBox.style.display = 'none';
+                }
+            }).addTo(map);
         }
 
         function toggleNav(start) {
             isNavigating = start;
             document.getElementById('search-card').style.display = start ? 'none' : 'block';
             document.getElementById('instruction-panel').style.display = start ? 'flex' : 'none';
+            document.getElementById('mode-selector').style.display = start ? 'none' : 'flex';
+            
             document.getElementById('action-area').innerHTML = start ? 
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
@@ -453,15 +369,31 @@
             document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
             
             if(start) {
+                userInteracting = false;
                 map.setZoom(19);
-                isCameraFree = false; 
-                speak("Iniciando.");
+                const ut = new SpeechSynthesisUtterance("Iniciando percurso.");
+                ut.lang = 'pt-BR';
+                synth.speak(ut);
             } else {
                 clearSelection();
                 document.getElementById('map').classList.remove('map-3d-active');
-                synth.cancel();
             }
-            lucide.createIcons();
+        }
+
+        function updateNavigation() {
+            if (!routingControl || !routingControl._selectedRoute) return;
+            const route = routingControl._selectedRoute;
+            const inst = route.instructions[0];
+            document.getElementById('inst-text').innerText = inst.text;
+            document.getElementById('inst-dist').innerText = `EM ${Math.round(inst.distance)}m`;
+        }
+
+        function clearSelection() {
+            if (isNavigating) return;
+            if (routingControl) map.removeControl(routingControl);
+            if (destMarker) map.removeLayer(destMarker);
+            document.getElementById('trip-card').classList.remove('active');
+            routingControl = null; destinationLatLng = null;
         }
 
         const input = document.getElementById('dest-input');
@@ -473,7 +405,7 @@
                 box.innerHTML = ''; box.classList.remove('hidden');
                 data.candidates.forEach(c => {
                     const d = document.createElement('div');
-                    d.className = 'search-item text-white text-sm hover:bg-white/5 transition-all';
+                    d.className = 'search-item text-white text-sm hover:bg-white/5';
                     d.innerText = c.address;
                     d.onclick = () => {
                         box.classList.add('hidden');
