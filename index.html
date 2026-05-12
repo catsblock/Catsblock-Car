@@ -59,7 +59,6 @@
 
         .marker-blue { width: 18px; height: 18px; background: var(--accent); border: 3px solid white; border-radius: 50%; box-shadow: 0 0 15px var(--accent); }
         
-        /* Radares Dinâmicos */
         .radar-dot { width: 22px; height: 22px; border: 3px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .radar-speed { background: #ff453a; }
         .radar-traffic { background: #facc15; }
@@ -147,14 +146,14 @@
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
     </div>
 
-    <!-- Modal de Alertas Atualizado -->
+    <!-- Modal de Alertas -->
     <div id="alert-modal" onclick="closeAlertModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"></div>
             <h2 id="alert-title" class="text-2xl font-black mb-2">Título</h2>
             <p id="alert-type" class="text-purple-500 font-bold text-xs uppercase tracking-widest mb-4">Tipo do Alerta</p>
             <div class="bg-white/5 p-4 rounded-2xl mb-6">
-                <p id="alert-desc" class="text-zinc-400 text-sm leading-relaxed" id="alert-desc-text"></p>
+                <p id="alert-desc-text" class="text-zinc-400 text-sm leading-relaxed"></p>
                 <div id="radar-lesson" class="mt-4 pt-4 border-t border-white/5 hidden">
                     <p class="text-white font-bold text-xs mb-2">O que isso faz na sua vida?</p>
                     <p id="lesson-text" class="text-purple-300 text-xs italic"></p>
@@ -221,13 +220,16 @@
 
     <div class="ui-container bottom-ui" id="trip-card">
         <div class="glass-card relative">
-            <div class="absolute top-4 right-4 flex gap-3">
-                <button onclick="clearSelection()" class="text-zinc-500 hover:text-white">
+            <div class="absolute top-4 right-4 flex flex-col gap-2 items-center">
+                <button onclick="clearSelection()" class="text-zinc-500 hover:text-white p-2" title="Fechar">
                     <i data-lucide="x" size="20"></i>
+                </button>
+                <button onclick="shareTrip()" class="text-zinc-500 hover:text-purple-400 p-2" title="Compartilhar">
+                    <i data-lucide="share-2" size="20"></i>
                 </button>
             </div>
             
-            <div id="mode-selector" class="flex justify-between gap-2 mb-4 pr-10">
+            <div id="mode-selector" class="flex justify-between gap-2 mb-4 pr-16">
                 <button onclick="setTravelMode('car')" class="mode-btn active" id="mode-car"><i data-lucide="car" size="18"></i></button>
                 <button onclick="setTravelMode('uber')" class="mode-btn" id="mode-uber"><i data-lucide="smartphone" size="18"></i></button>
                 <button onclick="setTravelMode('bus')" class="mode-btn" id="mode-bus"><i data-lucide="bus" size="18"></i></button>
@@ -271,32 +273,10 @@
 
         let config = { theme: 'auto', vision: 'auto' };
 
-        // Definições de Radar
         const RADAR_DATA = {
-            fixed: {
-                title: "Radar de Velocidade",
-                desc: "Monitoramento contínuo de velocidade por laços no asfalto.",
-                lesson: "Ele evita que você corra demais, preservando os freios do seu carro e garantindo que você não perca o controle em curvas. Multas aqui doem no bolso e na CNH.",
-                type: "VELOCIDADE",
-                icon: "gauge",
-                class: "radar-speed"
-            },
-            traffic_light: {
-                title: "Radar de Semáforo",
-                desc: "Captura avanço de sinal vermelho e parada sobre a faixa.",
-                lesson: "Protege sua vida e seu carro de colisões laterais (o 'T-bone'). Manter-se parado evita que pedestres risquem sua lataria ao tentar passar.",
-                type: "TRÂNSITO",
-                icon: "traffic-light",
-                class: "radar-traffic"
-            },
-            bus_lane: {
-                title: "Fiscalização de Faixa",
-                desc: "Monitora o uso exclusivo de faixas de ônibus.",
-                lesson: "Seu carro pode ser apreendido se você insistir aqui. Deixar a faixa livre melhora o fluxo da cidade e evita que um ônibus de 15 toneladas encoste no seu retrovisor.",
-                type: "ÔNIBUS",
-                icon: "bus",
-                class: "radar-bus"
-            }
+            fixed: { title: "Radar de Velocidade", desc: "Monitoramento contínuo de velocidade.", lesson: "Ele evita que você corra demais, preservando os freios do seu carro.", type: "VELOCIDADE", icon: "gauge", class: "radar-speed" },
+            traffic_light: { title: "Radar de Semáforo", desc: "Captura avanço de sinal vermelho.", lesson: "Protege sua vida de colisões laterais.", type: "TRÂNSITO", icon: "traffic-light", class: "radar-traffic" },
+            bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
 
         function loadConfig() {
@@ -340,11 +320,9 @@
                 mapEl.classList.remove('map-3d-active');
                 return;
             }
-            if (config.vision === '3d') {
-                mapEl.classList.add('map-3d-active');
-            } else if (config.vision === '2d') {
-                mapEl.classList.remove('map-3d-active');
-            } else {
+            if (config.vision === '3d') mapEl.classList.add('map-3d-active');
+            else if (config.vision === '2d') mapEl.classList.remove('map-3d-active');
+            else {
                 if (currentSpeed > 30) mapEl.classList.add('map-3d-active');
                 else mapEl.classList.remove('map-3d-active');
             }
@@ -362,9 +340,7 @@
                 ut.lang = 'pt-BR';
                 synth.cancel();
                 synth.speak(ut);
-            } catch (e) {
-                document.getElementById('inst-text').innerText = text;
-            }
+            } catch (e) { document.getElementById('inst-text').innerText = text; }
         }
 
         lucide.createIcons();
@@ -386,17 +362,29 @@
             updateUserMarker(userPos, 0, false);
             fetchAlerts();
 
-            const handleInteraction = () => {
+            // Lógica de recebimento de link compartilhado
+            const urlParams = new URLSearchParams(window.location.search);
+            const shareLat = urlParams.get('lat');
+            const shareLng = urlParams.get('lng');
+            const startLat = urlParams.get('slat');
+            const startLng = urlParams.get('slng');
+
+            if(shareLat && shareLng) {
+                setTimeout(() => {
+                    const dest = L.latLng(parseFloat(shareLat), parseFloat(shareLng));
+                    // Se houver ponto de partida no link, usamos ele em vez da posição real atual para o cálculo inicial
+                    const origin = (startLat && startLng) ? L.latLng(parseFloat(startLat), parseFloat(startLng)) : L.latLng(userPos);
+                    setDest(dest, origin);
+                    map.flyTo([dest.lat, dest.lng], 16);
+                }, 1000);
+            }
+
+            map.on('movestart touchstart mousedown wheel rotate', () => {
                 userInteracting = true;
                 updateVisionMode();
                 clearTimeout(interactionTimer);
-                interactionTimer = setTimeout(() => {
-                    userInteracting = false;
-                    updateVisionMode();
-                }, 3000);
-            };
-
-            map.on('movestart touchstart mousedown wheel rotate', handleInteraction);
+                interactionTimer = setTimeout(() => { userInteracting = false; updateVisionMode(); }, 3000);
+            });
 
             navigator.geolocation.watchPosition(pos => {
                 const coords = [pos.coords.latitude, pos.coords.longitude];
@@ -427,52 +415,26 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        /**
-         * NOVA API DE INCIDENTES (Substituindo Overpass)
-         * Utiliza o serviço de geo-features dinâmicas do OSM filtrado por categorias de tráfego
-         * para simular o comportamento do Waze sem necessidade de chave proprietária.
-         */
         async function fetchAlerts() {
             if (!userPos) return;
-            
-            // Usamos um serviço de consulta de POIs dinâmicos focado em infraestrutura de tráfego (Photon/OSM dinâmico)
-            // O raio é mantido em 1.5km.
             const url = `https://photon.komoot.io/api/?lat=${userPos[0]}&lon=${userPos[1]}&limit=50&radius=1.5&q=speed_camera,construction`;
-            
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                
                 alertLayer.clearLayers();
-                
                 data.features.forEach(feature => {
                     const props = feature.properties;
                     const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
-
-                    // Filtro de Radares
                     if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
-                        let typeKey = 'fixed';
-                        if (props.osm_key === 'traffic_light') typeKey = 'traffic_light';
-                        
+                        let typeKey = props.osm_key === 'traffic_light' ? 'traffic_light' : 'fixed';
                         const rInfo = RADAR_DATA[typeKey];
-
-                        L.marker(coords, { 
-                            icon: L.divIcon({ className: `radar-dot ${rInfo.class}` }) 
-                        }).on('click', () => {
-                            showRadarModal(rInfo);
-                        }).addTo(alertLayer);
-                    } 
-                    // Filtro de Obras
-                    else if (props.osm_value === 'construction' || props.osm_key === 'construction') {
-                        // Para obras em API de POI, criamos uma área de alerta circular ou polígono se disponível
+                        L.marker(coords, { icon: L.divIcon({ className: `radar-dot ${rInfo.class}` }) }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
+                    } else if (props.osm_value === 'construction') {
                         L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 })
-                         .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários e máquinas na pista. Velocidade reduzida.', 'construction'))
-                         .addTo(alertLayer);
+                         .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
-            } catch(e) {
-                console.error("Erro ao buscar incidentes via API Dinâmica");
-            }
+            } catch(e) {}
         }
 
         function showRadarModal(info) {
@@ -485,25 +447,19 @@
             document.getElementById('alert-type').innerText = typeTag;
             document.getElementById('alert-title').innerText = title;
             document.getElementById('alert-desc-text').innerText = desc;
-            
             const iconBox = document.getElementById('alert-icon-box');
-            let bgColor = "bg-zinc-700";
-            if (iconType === 'construction') bgColor = "bg-orange-600";
-            if (iconType === 'gauge') bgColor = "bg-red-600";
-            if (iconType === 'traffic-light') bgColor = "bg-yellow-500";
-            if (iconType === 'bus') bgColor = "bg-blue-600";
-
-            iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${bgColor}`;
+            let color = "bg-zinc-700";
+            if (iconType === 'construction') color = "bg-orange-600";
+            if (iconType === 'gauge') color = "bg-red-600";
+            if (iconType === 'traffic-light') color = "bg-yellow-500";
+            if (iconType === 'bus') color = "bg-blue-600";
+            iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${color}`;
             iconBox.innerHTML = `<i data-lucide="${iconType}" color="white" size="32"></i>`;
-            
             lucide.createIcons();
             document.getElementById('alert-modal').style.display = 'flex';
         }
 
-        function closeAlertModal() {
-            document.getElementById('alert-modal').style.display = 'none';
-            document.getElementById('radar-lesson').classList.add('hidden');
-        }
+        function closeAlertModal() { document.getElementById('alert-modal').style.display = 'none'; document.getElementById('radar-lesson').classList.add('hidden'); }
 
         function setTravelMode(mode) {
             travelMode = mode;
@@ -519,10 +475,12 @@
             function frame(now) {
                 const p = Math.min((now - startTime) / 850, 1);
                 userPos = [start[0] + (target[0]-start[0])*p, start[1] + (target[1]-start[1])*p];
-                if (prevPos) {
-                    const angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
-                    rotation = 90 - angle;
+                
+                // Melhoria na rotação: só muda se houver deslocamento real
+                if (prevPos && getDistance(target, prevPos) > 0.5) {
+                    rotation = 90 - (Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI);
                 }
+                
                 updateUserMarker(userPos, rotation, isNavigating);
                 if (isNavigating && !userInteracting) map.setView(userPos);
                 if (p < 1) requestAnimationFrame(frame);
@@ -539,7 +497,7 @@
             userMarker.setLatLng(coords);
         }
 
-        function setDest(latlng) {
+        function setDest(latlng, forcedOrigin = null) {
             if (destMarker) map.removeLayer(destMarker);
             destinationLatLng = latlng;
             destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
@@ -549,17 +507,27 @@
             const profiles = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' };
             const colors = { car: '#A855F7', uber: '#A855F7', bus: '#3b82f6', bike: '#22c55e', walk: '#eab308' };
 
+            const origin = forcedOrigin || L.latLng(userPos);
+
             routingControl = L.Routing.control({
-                waypoints: [L.latLng(userPos), latlng],
+                waypoints: [origin, latlng],
                 router: L.Routing.osrmv1({ serviceUrl: `https://router.project-osrm.org/route/v1`, profile: profiles[travelMode] }),
                 lineOptions: { styles: [{ color: 'white', opacity: 0.8, weight: 12 }, { color: colors[travelMode], opacity: 1, weight: 8 }] },
                 createMarker: () => null, show: false, routeWhileDragging: false
             }).on('routesfound', e => {
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
-                let minutes = Math.floor(route.summary.totalTime / 60);
                 
-                document.getElementById('eta-val').innerText = minutes + "m";
+                let speedMetersPerMin;
+                switch(travelMode) {
+                    case 'walk': speedMetersPerMin = 83; break;
+                    case 'bike': speedMetersPerMin = 250; break;
+                    case 'bus': speedMetersPerMin = 333; break;
+                    default: speedMetersPerMin = 666;
+                }
+
+                let estimatedMinutes = Math.ceil(route.summary.totalDistance / speedMetersPerMin);
+                document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
                 const ev = document.getElementById('extra-info-val');
                 const el = document.getElementById('extra-info-label');
@@ -569,6 +537,29 @@
                 else if (travelMode === 'bike') { el.innerText = "Calorias Est."; ev.innerText = `${Math.round(dKm * 32)} kcal`; }
                 else { el.innerText = "Passos Est."; ev.innerText = `${Math.round(dKm * 1400)}`; }
             }).addTo(map);
+        }
+
+        function shareTrip() {
+            if(!destinationLatLng || !userPos) return;
+            
+            // Gerar link com Origem (slat/slng) e Destino (lat/lng)
+            const url = new URL(window.location.href.split('?')[0]); // Limpa params antigos
+            url.searchParams.set('lat', destinationLatLng.lat);
+            url.searchParams.set('lng', destinationLatLng.lng);
+            url.searchParams.set('slat', userPos[0]); // Sua localização atual como ponto de partida
+            url.searchParams.set('slng', userPos[1]);
+            
+            const shareUrl = url.toString();
+            
+            // Copiar para o clipboard
+            const el = document.createElement('textarea');
+            el.value = shareUrl;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            showAlertModal('COMPARTILHADO', 'Rota Compartilhada!', 'O link com sua localização atual e o destino foi copiado. Quem abrir verá exatamente esse trajeto.', 'share-2');
         }
 
         function toggleNav(start) {
@@ -581,14 +572,17 @@
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
             document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
+            
             if(start) {
-                userInteracting = false;
-                map.setZoom(19);
+                userInteracting = false; 
+                map.setZoom(19); 
                 updateVisionMode();
+                // Forçar recálculo da rota a partir da posição REAL agora que iniciou
+                setDest(destinationLatLng); 
                 translateText("Iniciando navegação.");
-            } else {
-                clearSelection();
-                updateVisionMode();
+            } else { 
+                clearSelection(); 
+                updateVisionMode(); 
             }
         }
 
@@ -605,12 +599,13 @@
             if (destMarker) map.removeLayer(destMarker);
             document.getElementById('trip-card').classList.remove('active');
             routingControl = null; destinationLatLng = null;
+            // Limpar URL
+            window.history.replaceState({}, '', window.location.pathname);
         }
 
-        const input = document.getElementById('dest-input');
-        input.addEventListener('keydown', async (e) => {
+        document.getElementById('dest-input').addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
-                const res = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(input.value)}&maxLocations=5&outFields=Match_addr&countryCode=BRA`);
+                const res = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(e.target.value)}&maxLocations=5&outFields=Match_addr&countryCode=BRA`);
                 const data = await res.json();
                 const box = document.getElementById('results');
                 box.innerHTML = ''; box.classList.remove('hidden');
@@ -618,11 +613,7 @@
                     const d = document.createElement('div');
                     d.className = 'search-item text-white text-sm hover:bg-white/5';
                     d.innerText = c.address;
-                    d.onclick = () => {
-                        box.classList.add('hidden');
-                        setDest(L.latLng(c.location.y, c.location.x));
-                        map.flyTo([c.location.y, c.location.x], 17);
-                    };
+                    d.onclick = () => { box.classList.add('hidden'); setDest(L.latLng(c.location.y, c.location.x)); map.flyTo([c.location.y, c.location.x], 17); };
                     box.appendChild(d);
                 });
             }
