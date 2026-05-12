@@ -146,7 +146,6 @@
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
     </div>
 
-    <!-- Modal de Alertas -->
     <div id="alert-modal" onclick="closeAlertModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"></div>
@@ -346,15 +345,34 @@
         lucide.createIcons();
         loadConfig();
 
+        // Checagem imediata de URL para decidir se remove a splash logo no início
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasRoute = urlParams.get('lat') && urlParams.get('lng');
+
         function unlock() {
             navigator.geolocation.getCurrentPosition(pos => {
                 document.getElementById('splash').style.display = 'none';
                 init(pos.coords.latitude, pos.coords.longitude);
-            }, () => alert("GPS necessário."));
+            }, () => {
+                alert("GPS necessário para navegar.");
+            });
+        }
+
+        // Se o link for compartilhado, podemos tentar dar unlock automático se o usuário já tiver permitido GPS antes
+        if (hasRoute) {
+            // Tenta obter permissão silenciosa ou forçar o clique se falhar
+            navigator.geolocation.getCurrentPosition(pos => {
+                document.getElementById('splash').style.display = 'none';
+                init(pos.coords.latitude, pos.coords.longitude);
+            }, () => {
+                // Se falhar ou precisar de interação, o botão "Entrar e Navegar" ainda estará lá
+            });
         }
 
         function init(lat, lng) {
             userPos = [lat, lng];
+            if (map) return; // Evita inicializar duas vezes
+
             map = L.map('map', { zoomControl: false, attributionControl: false, touchRotate: true }).setView(userPos, 19);
             tileLayer = L.tileLayer('', {}).addTo(map);
             applyTheme();
@@ -363,7 +381,6 @@
             fetchAlerts();
 
             // Lógica de recebimento de link compartilhado
-            const urlParams = new URLSearchParams(window.location.search);
             const shareLat = urlParams.get('lat');
             const shareLng = urlParams.get('lng');
             const startLat = urlParams.get('slat');
@@ -372,11 +389,10 @@
             if(shareLat && shareLng) {
                 setTimeout(() => {
                     const dest = L.latLng(parseFloat(shareLat), parseFloat(shareLng));
-                    // Se houver ponto de partida no link, usamos ele em vez da posição real atual para o cálculo inicial
                     const origin = (startLat && startLng) ? L.latLng(parseFloat(startLat), parseFloat(startLng)) : L.latLng(userPos);
                     setDest(dest, origin);
                     map.flyTo([dest.lat, dest.lng], 16);
-                }, 1000);
+                }, 800);
             }
 
             map.on('movestart touchstart mousedown wheel rotate', () => {
@@ -475,12 +491,9 @@
             function frame(now) {
                 const p = Math.min((now - startTime) / 850, 1);
                 userPos = [start[0] + (target[0]-start[0])*p, start[1] + (target[1]-start[1])*p];
-                
-                // Melhoria na rotação: só muda se houver deslocamento real
                 if (prevPos && getDistance(target, prevPos) > 0.5) {
                     rotation = 90 - (Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI);
                 }
-                
                 updateUserMarker(userPos, rotation, isNavigating);
                 if (isNavigating && !userInteracting) map.setView(userPos);
                 if (p < 1) requestAnimationFrame(frame);
@@ -542,16 +555,10 @@
         function shareTrip() {
             if(!destinationLatLng || !userPos) return;
             
-            // Gerar link com Origem (slat/slng) e Destino (lat/lng)
-            const url = new URL(window.location.href.split('?')[0]); // Limpa params antigos
-            url.searchParams.set('lat', destinationLatLng.lat);
-            url.searchParams.set('lng', destinationLatLng.lng);
-            url.searchParams.set('slat', userPos[0]); // Sua localização atual como ponto de partida
-            url.searchParams.set('slng', userPos[1]);
+            // Usando o domínio oficial catsblock-car.pages.dev
+            const baseUrl = "https://catsblock-car.pages.dev";
+            const shareUrl = `${baseUrl}/?lat=${destinationLatLng.lat}&lng=${destinationLatLng.lng}&slat=${userPos[0]}&slng=${userPos[1]}`;
             
-            const shareUrl = url.toString();
-            
-            // Copiar para o clipboard
             const el = document.createElement('textarea');
             el.value = shareUrl;
             document.body.appendChild(el);
@@ -559,7 +566,7 @@
             document.execCommand('copy');
             document.body.removeChild(el);
             
-            showAlertModal('COMPARTILHADO', 'Rota Compartilhada!', 'O link com sua localização atual e o destino foi copiado. Quem abrir verá exatamente esse trajeto.', 'share-2');
+            showAlertModal('COMPARTILHADO', 'Rota Copiada!', 'O link com sua rota foi copiado. Ao abrir, o sistema mostrará este trajeto.', 'share-2');
         }
 
         function toggleNav(start) {
@@ -577,7 +584,6 @@
                 userInteracting = false; 
                 map.setZoom(19); 
                 updateVisionMode();
-                // Forçar recálculo da rota a partir da posição REAL agora que iniciou
                 setDest(destinationLatLng); 
                 translateText("Iniciando navegação.");
             } else { 
@@ -599,8 +605,8 @@
             if (destMarker) map.removeLayer(destMarker);
             document.getElementById('trip-card').classList.remove('active');
             routingControl = null; destinationLatLng = null;
-            // Limpar URL
-            window.history.replaceState({}, '', window.location.pathname);
+            // Limpa parâmetros da URL sem recarregar
+            window.history.replaceState({}, '', '/');
         }
 
         document.getElementById('dest-input').addEventListener('keydown', async (e) => {
