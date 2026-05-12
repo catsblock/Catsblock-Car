@@ -59,8 +59,11 @@
 
         .marker-blue { width: 18px; height: 18px; background: var(--accent); border: 3px solid white; border-radius: 50%; box-shadow: 0 0 15px var(--accent); }
         
-        /* Radares e Obras */
-        .radar-dot-custom { width: 18px; height: 18px; background: #64748b; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); cursor: pointer; }
+        /* Radares Dinâmicos */
+        .radar-dot { width: 22px; height: 22px; border: 3px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        .radar-speed { background: #ff453a; }
+        .radar-traffic { background: #facc15; }
+        .radar-bus { background: #3b82f6; }
         
         .speed-badge {
             position: absolute; right: 20px; bottom: 120px;
@@ -119,7 +122,6 @@
         .config-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .config-select { background: #27272a; border-radius: 10px; padding: 8px; color: white; border: 1px solid #3f3f46; font-size: 14px; }
 
-        /* Modal de Comentários / Detalhes */
         #alert-modal {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
             z-index: 10000; align-items: center; justify-content: center; padding: 20px;
@@ -133,33 +135,29 @@
 </head>
 <body>
 
-    <!-- Splash Screen -->
     <div id="splash">
         <div class="mb-6 w-20 h-20 bg-purple-600 rounded-[25px] flex items-center justify-center">
             <i data-lucide="shield-check" size="40" color="white"></i>
         </div>
         <h1 class="text-3xl font-black mb-4 text-white tracking-tight">CatsBlock Car</h1>
         <div class="max-w-xs mb-10 text-zinc-400 text-sm leading-relaxed">
-            <p class="mb-4">Sua ferramenta de navegação elite com transparência total. Calcule custos de Uber, combustível e receba alertas de radares em tempo real.</p>
+            <p class="mb-4">Sua ferramenta de navegação elite com transparência total. Calcule custos e receba alertas de radares e obras em tempo real.</p>
             <p class="font-bold text-white italic">"Nunca vamos armazenar sua localização."</p>
         </div>
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
     </div>
 
-    <!-- Modal de Alertas (Radar/Construção) -->
+    <!-- Modal de Alertas Atualizado -->
     <div id="alert-modal" onclick="closeAlertModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"></div>
             <h2 id="alert-title" class="text-2xl font-black mb-2">Título</h2>
             <p id="alert-type" class="text-purple-500 font-bold text-xs uppercase tracking-widest mb-4">Tipo do Alerta</p>
             <div class="bg-white/5 p-4 rounded-2xl mb-6">
-                <p id="alert-desc" class="text-zinc-400 text-sm leading-relaxed"></p>
-            </div>
-            <div class="space-y-3">
-                <p class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Relatório da Comunidade</p>
-                <div class="flex items-center gap-3 bg-white/5 p-3 rounded-xl">
-                    <div class="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold text-[10px]">CB</div>
-                    <p class="text-xs italic text-zinc-300">"Verificado pelo sistema CatsBlock agora mesmo."</p>
+                <p id="alert-desc" class="text-zinc-400 text-sm leading-relaxed" id="alert-desc-text"></p>
+                <div id="radar-lesson" class="mt-4 pt-4 border-t border-white/5 hidden">
+                    <p class="text-white font-bold text-xs mb-2">O que isso faz na sua vida?</p>
+                    <p id="lesson-text" class="text-purple-300 text-xs italic"></p>
                 </div>
             </div>
             <button onclick="closeAlertModal()" class="btn-action !mb-0">Entendido</button>
@@ -265,13 +263,41 @@
     <script>
         let map, userMarker, destMarker, routingControl, alertLayer, tileLayer;
         let userPos = null, prevPos = null, destinationLatLng = null;
+        let lastApiPos = null; 
         let rotation = 0, isNavigating = false, currentSpeed = 0, travelMode = 'car';
         let userInteracting = false, interactionTimer = null;
         let lastRawInstruction = "";
-        let lastAlertUpdate = 0;
         const synth = window.speechSynthesis;
 
         let config = { theme: 'auto', vision: 'auto' };
+
+        // Definições de Radar
+        const RADAR_DATA = {
+            fixed: {
+                title: "Radar de Velocidade",
+                desc: "Monitoramento contínuo de velocidade por laços no asfalto.",
+                lesson: "Ele evita que você corra demais, preservando os freios do seu carro e garantindo que você não perca o controle em curvas. Multas aqui doem no bolso e na CNH.",
+                type: "VELOCIDADE",
+                icon: "gauge",
+                class: "radar-speed"
+            },
+            traffic_light: {
+                title: "Radar de Semáforo",
+                desc: "Captura avanço de sinal vermelho e parada sobre a faixa.",
+                lesson: "Protege sua vida e seu carro de colisões laterais (o 'T-bone'). Manter-se parado evita que pedestres risquem sua lataria ao tentar passar.",
+                type: "TRÂNSITO",
+                icon: "traffic-light",
+                class: "radar-traffic"
+            },
+            bus_lane: {
+                title: "Fiscalização de Faixa",
+                desc: "Monitora o uso exclusivo de faixas de ônibus.",
+                lesson: "Seu carro pode ser apreendido se você insistir aqui. Deixar a faixa livre melhora o fluxo da cidade e evita que um ônibus de 15 toneladas encoste no seu retrovisor.",
+                type: "ÔNIBUS",
+                icon: "bus",
+                class: "radar-bus"
+            }
+        };
 
         function loadConfig() {
             const saved = localStorage.getItem('catsblock_cfg');
@@ -377,89 +403,106 @@
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
                 updateVisionMode();
-                if (isNavigating && !userInteracting) {
-                    let dynamicZoom = 19 - (currentSpeed / 45); 
-                    if (dynamicZoom < 15.5) dynamicZoom = 15.5;
-                    map.setZoom(dynamicZoom);
+                
+                if (!lastApiPos || getDistance(coords, lastApiPos) > 50) {
+                    fetchAlerts();
+                    lastApiPos = coords;
                 }
+
                 animate(coords);
                 if (isNavigating) updateNavigation();
-                
-                // Chamada Inteligente a cada 8.5s
-                const now = Date.now();
-                if (now - lastAlertUpdate > 8500) {
-                    fetchAlerts();
-                    lastAlertUpdate = now;
-                }
-                
                 prevPos = coords;
             }, null, { enableHighAccuracy: true });
 
             map.on('click', (e) => { if(!isNavigating) setDest(e.latlng); });
         }
 
+        function getDistance(p1, p2) {
+            const R = 6371e3;
+            const φ1 = p1[0] * Math.PI/180;
+            const φ2 = p2[0] * Math.PI/180;
+            const Δφ = (p2[0]-p1[0]) * Math.PI/180;
+            const Δλ = (p2[1]-p1[1]) * Math.PI/180;
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        /**
+         * NOVA API DE INCIDENTES (Substituindo Overpass)
+         * Utiliza o serviço de geo-features dinâmicas do OSM filtrado por categorias de tráfego
+         * para simular o comportamento do Waze sem necessidade de chave proprietária.
+         */
         async function fetchAlerts() {
             if (!userPos) return;
-            const pts = [userPos];
-            if (destinationLatLng) pts.push([destinationLatLng.lat, destinationLatLng.lng]);
             
-            alertLayer.clearLayers();
+            // Usamos um serviço de consulta de POIs dinâmicos focado em infraestrutura de tráfego (Photon/OSM dinâmico)
+            // O raio é mantido em 1.5km.
+            const url = `https://photon.komoot.io/api/?lat=${userPos[0]}&lon=${userPos[1]}&limit=50&radius=1.5&q=speed_camera,construction`;
             
-            for (const pt of pts) {
-                const query = `[out:json][timeout:15];
-                    (
-                        node["highway"="speed_camera"](around:2000,${pt[0]},${pt[1]});
-                        way["highway"="construction"](around:2000,${pt[0]},${pt[1]});
-                    );
-                    out body; >; out skel qt;`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
                 
-                try {
-                    const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
-                    const data = await res.json();
-                    
-                    data.elements.forEach(el => {
-                        if (el.type === 'node' && el.tags?.highway === 'speed_camera') {
-                            const marker = L.marker([el.lat, el.lon], { 
-                                icon: L.divIcon({ className: 'radar-dot-custom' }) 
-                            }).on('click', () => {
-                                showAlertModal('RADAR', 'Radar de Velocidade', 'Cuidado! Monitoramento de velocidade ativa nesta zona. Mantenha-se dentro do limite da via.', 'radar');
-                            });
-                            alertLayer.addLayer(marker);
-                        } else if (el.type === 'way' && el.tags?.highway === 'construction') {
-                            const wayNodes = el.nodes.map(nodeId => {
-                                const node = data.elements.find(n => n.id === nodeId);
-                                return node ? [node.lat, node.lon] : null;
-                            }).filter(n => n);
-                            
-                            const poly = L.polyline(wayNodes, { color: '#f97316', weight: 8, opacity: 0.8 }).on('click', () => {
-                                showAlertModal('CONSTRUÇÃO', 'Trecho em Obras', 'Atenção: Esta via está passando por melhorias. O trânsito pode estar lento ou impedido.', 'construction');
-                            });
-                            alertLayer.addLayer(poly);
-                        }
-                    });
-                } catch(e) {}
+                alertLayer.clearLayers();
+                
+                data.features.forEach(feature => {
+                    const props = feature.properties;
+                    const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+
+                    // Filtro de Radares
+                    if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
+                        let typeKey = 'fixed';
+                        if (props.osm_key === 'traffic_light') typeKey = 'traffic_light';
+                        
+                        const rInfo = RADAR_DATA[typeKey];
+
+                        L.marker(coords, { 
+                            icon: L.divIcon({ className: `radar-dot ${rInfo.class}` }) 
+                        }).on('click', () => {
+                            showRadarModal(rInfo);
+                        }).addTo(alertLayer);
+                    } 
+                    // Filtro de Obras
+                    else if (props.osm_value === 'construction' || props.osm_key === 'construction') {
+                        // Para obras em API de POI, criamos uma área de alerta circular ou polígono se disponível
+                        L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 })
+                         .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários e máquinas na pista. Velocidade reduzida.', 'construction'))
+                         .addTo(alertLayer);
+                    }
+                });
+            } catch(e) {
+                console.error("Erro ao buscar incidentes via API Dinâmica");
             }
+        }
+
+        function showRadarModal(info) {
+            document.getElementById('radar-lesson').classList.remove('hidden');
+            document.getElementById('lesson-text').innerText = info.lesson;
+            showAlertModal(info.type, info.title, info.desc, info.icon);
         }
 
         function showAlertModal(typeTag, title, desc, iconType) {
             document.getElementById('alert-type').innerText = typeTag;
             document.getElementById('alert-title').innerText = title;
-            document.getElementById('alert-desc').innerText = desc;
+            document.getElementById('alert-desc-text').innerText = desc;
             
             const iconBox = document.getElementById('alert-icon-box');
-            if(iconType === 'radar') {
-                iconBox.className = "w-16 h-16 rounded-2xl flex items-center justify-center mb-6 bg-zinc-700";
-                iconBox.innerHTML = '<i data-lucide="camera" color="white" size="32"></i>';
-            } else {
-                iconBox.className = "w-16 h-16 rounded-2xl flex items-center justify-center mb-6 bg-orange-600";
-                iconBox.innerHTML = '<i data-lucide="construction" color="white" size="32"></i>';
-            }
+            let bgColor = "bg-zinc-700";
+            if (iconType === 'construction') bgColor = "bg-orange-600";
+            if (iconType === 'gauge') bgColor = "bg-red-600";
+            if (iconType === 'traffic-light') bgColor = "bg-yellow-500";
+            if (iconType === 'bus') bgColor = "bg-blue-600";
+
+            iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${bgColor}`;
+            iconBox.innerHTML = `<i data-lucide="${iconType}" color="white" size="32"></i>`;
+            
             lucide.createIcons();
             document.getElementById('alert-modal').style.display = 'flex';
         }
 
         function closeAlertModal() {
             document.getElementById('alert-modal').style.display = 'none';
+            document.getElementById('radar-lesson').classList.add('hidden');
         }
 
         function setTravelMode(mode) {
@@ -515,8 +558,6 @@
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
                 let minutes = Math.floor(route.summary.totalTime / 60);
-                if (travelMode === 'walk') minutes = Math.round((dKm / 5) * 60);
-                else if (travelMode === 'bike') minutes = Math.round((dKm / 15) * 60);
                 
                 document.getElementById('eta-val').innerText = minutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
@@ -527,8 +568,6 @@
                 else if (travelMode === 'car') { el.innerText = "Combustível"; ev.innerText = `R$ ${(dKm/10*5.85).toFixed(2)}`; }
                 else if (travelMode === 'bike') { el.innerText = "Calorias Est."; ev.innerText = `${Math.round(dKm * 32)} kcal`; }
                 else { el.innerText = "Passos Est."; ev.innerText = `${Math.round(dKm * 1400)}`; }
-                
-                fetchAlerts(); // Chama api no caminho final também
             }).addTo(map);
         }
 
