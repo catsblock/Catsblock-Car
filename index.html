@@ -10,6 +10,33 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Configuração original fornecida
+        const firebaseConfig = {
+          apiKey: "AIzaSyA4mSp5Ws_1TxAJ7v62CO5MomEGSGlr_Ek",
+          authDomain: "notes-cb.firebaseapp.com",
+          projectId: "notes-cb",
+          storageBucket: "notes-cb.firebasestorage.app",
+          messagingSenderId: "998677149165",
+          appId: "1:998677149165:web:777270f3dbac5b7c3fe3e4",
+          measurementId: "G-979CXJ6VZQ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'catsblock-car-v1';
+
+        // Exportando para o escopo global do sistema legado
+        window.fb = { db, auth, provider, appId, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp, signInWithPopup };
+    </script>
+    
     <style>
         :root {
             --accent: #A855F7;
@@ -64,14 +91,24 @@
         .radar-traffic { background: #facc15; }
         .radar-bus { background: #3b82f6; }
         
+        /* Nova posição solicitada: km/h para esquerda */
         .speed-badge {
-            position: absolute; right: 20px; bottom: 120px;
+            position: absolute; left: 20px; bottom: 120px;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
             padding: 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);
             text-align: center; min-width: 80px; z-index: 1000;
             transition: bottom 0.5s ease;
         }
         .speed-nav-active { bottom: 320px; }
+
+        /* Botão de Report na posição original do km/h (direita) */
+        #report-trigger-btn {
+            position: absolute; right: 20px; bottom: 120px;
+            background: var(--accent); color: white;
+            padding: 15px; border-radius: 20px; z-index: 1000;
+            transition: bottom 0.5s ease;
+            box-shadow: 0 10px 20px rgba(168, 85, 247, 0.4);
+        }
 
         .leaflet-routing-container, .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
         
@@ -118,6 +155,35 @@
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95);
             z-index: 5000; padding: 30px;
         }
+
+        /* Estilos Novos de Login e Report */
+        #login-screen, #report-panel {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+            z-index: 6000; flex-direction: column; align-items: center; justify-content: center;
+            padding: 30px; backdrop-filter: blur(10px);
+        }
+
+        .login-card, .report-card {
+            background: var(--surface); border-radius: 32px; padding: 35px;
+            width: 100%; max-width: 400px; border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+
+        .report-grid { display: grid; grid-cols: 2; gap: 12px; width: 100%; margin-top: 20px; }
+        .report-option {
+            background: rgba(255,255,255,0.05); padding: 15px; border-radius: 20px;
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            border: 1px solid transparent; transition: all 0.2s;
+        }
+        .report-option:active { transform: scale(0.95); background: var(--accent); }
+
+        #loader { display: none; position: fixed; inset: 0; background: black; z-index: 7000; flex-direction: column; align-items: center; justify-content: center; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #A855F7; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Estilo para Marcadores de Report */
+        .report-marker { width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); display: flex; items-center; justify-center; }
+
         .config-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .config-select { background: #27272a; border-radius: 10px; padding: 8px; color: white; border: 1px solid #3f3f46; font-size: 14px; }
 
@@ -134,6 +200,53 @@
 </head>
 <body>
 
+    <!-- Telas de Autenticação e Reports -->
+    <div id="loader">
+        <div class="spinner mb-4"></div>
+        <p class="text-xs font-bold uppercase tracking-widest text-zinc-500">Autenticando no Firebase...</p>
+    </div>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <div class="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="log-in" color="white" size="32"></i>
+            </div>
+            <h2 class="text-xl font-black mb-4">Faça login pra Reportar Acidentes, radares, obras e muito mais.</h2>
+            <button onclick="handleLogin()" class="w-full bg-white text-black py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:scale-[1.02] transition-transform">
+                <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335"/></svg>
+                Login via Google
+            </button>
+            <p class="mt-8 text-[10px] text-zinc-500 opacity-60 leading-relaxed uppercase font-bold">
+                Ao fazer sessão, você concorda que suas informações da sua conta Google sejam armazenadas no meu servidor firebase e caso suas informações sejam vazadas, é a Google que deixou.
+            </p>
+            <button onclick="toggleLogin(false)" class="mt-4 text-zinc-500 text-xs font-bold uppercase tracking-widest">Agora não</button>
+        </div>
+    </div>
+
+    <div id="report-panel">
+        <div class="report-card relative">
+            <button onclick="toggleReportPanel(false)" class="absolute top-4 right-4 text-zinc-500"><i data-lucide="x" size="20"></i></button>
+            <h2 class="text-xl font-black mb-2 text-left">Reportar Evento</h2>
+            <p class="text-zinc-500 text-xs text-left mb-6 font-medium">Ajude outros motoristas informando o que está acontecendo na via.</p>
+            
+            <div class="grid grid-cols-2 gap-3" id="main-report-grid">
+                <div onclick="submitReport('Polícia')" class="report-option"><i data-lucide="shield-alert" class="text-blue-500"></i><span class="text-[10px] font-bold uppercase">Polícia</span></div>
+                <div onclick="submitReport('Obras')" class="report-option"><i data-lucide="construction" class="text-orange-500"></i><span class="text-[10px] font-bold uppercase">Obras</span></div>
+                <div onclick="submitReport('Faixa Bloqueada')" class="report-option"><i data-lucide="octagon-x" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Faixa Bloq.</span></div>
+                <div onclick="openRadarSubMenu()" class="report-option"><i data-lucide="radar" class="text-purple-500"></i><span class="text-[10px] font-bold uppercase">Radar</span></div>
+                <div onclick="submitReport('Acidente')" class="report-option"><i data-lucide="car-front" class="text-red-400"></i><span class="text-[10px] font-bold uppercase">Acidente</span></div>
+                <div onclick="submitReport('Trânsito Lento')" class="report-option"><i data-lucide="clock" class="text-yellow-500"></i><span class="text-[10px] font-bold uppercase">Trânsito</span></div>
+            </div>
+
+            <div id="radar-submenu" class="hidden grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Radar', 'Trânsito')" class="report-option"><i data-lucide="traffic-light" class="text-yellow-400"></i><span class="text-[10px] font-bold uppercase">Trânsito</span></div>
+                <div onclick="submitReport('Radar', 'Velocidade')" class="report-option"><i data-lucide="gauge" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Velocidade</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restante do HTML Original -->
     <div id="splash">
         <div class="mb-6 w-20 h-20 bg-purple-600 rounded-[25px] flex items-center justify-center">
             <i data-lucide="shield-check" size="40" color="white"></i>
@@ -157,8 +270,17 @@
                     <p class="text-white font-bold text-xs mb-2">O que isso faz na sua vida?</p>
                     <p id="lesson-text" class="text-purple-300 text-xs italic"></p>
                 </div>
+                <!-- Detalhes do Criador e Votação -->
+                <div id="report-meta" class="mt-4 pt-4 border-t border-white/5 hidden">
+                   <p class="text-[9px] text-zinc-600 uppercase font-black mb-1">ID do Criador</p>
+                   <p id="creator-id" class="text-[10px] text-zinc-400 truncate mb-4"></p>
+                   <div class="flex gap-2">
+                       <button id="btn-not-exists" onclick="voteReport(false)" class="flex-1 bg-red-500/10 text-red-500 py-3 rounded-xl text-[10px] font-black uppercase">Não existe</button>
+                       <button id="btn-still-there" onclick="voteReport(true)" class="flex-1 bg-green-500/10 text-green-500 py-3 rounded-xl text-[10px] font-black uppercase">Ainda está lá</button>
+                   </div>
+                </div>
             </div>
-            <button onclick="closeAlertModal()" class="btn-action !mb-0">Entendido</button>
+            <button onclick="closeAlertModal()" class="btn-action !mb-0">Fechar</button>
         </div>
     </div>
 
@@ -188,10 +310,16 @@
         <p class="text-xs text-zinc-500 mt-10">As preferências são salvas localmente.</p>
     </div>
 
+    <!-- Indicador de KM/H à esquerda -->
     <div class="speed-badge" id="speed-ui">
         <span class="block text-3xl font-black text-white" id="speed-val">0</span>
         <span class="block text-[10px] text-zinc-500 font-bold uppercase">km/h</span>
     </div>
+
+    <!-- Botão de Report na direita -->
+    <button id="report-trigger-btn" onclick="initiateReport()">
+        <i data-lucide="megaphone" size="24"></i>
+    </button>
 
     <div class="ui-container top-ui" id="ui-top">
         <div id="instruction-panel">
@@ -262,6 +390,7 @@
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
     <script>
+        // --- Variáveis Originais ---
         let map, userMarker, destMarker, routingControl, alertLayer, tileLayer;
         let userPos = null, prevPos = null, destinationLatLng = null;
         let lastApiPos = null; 
@@ -270,6 +399,13 @@
         let lastRawInstruction = "";
         const synth = window.speechSynthesis;
 
+        // --- Novas Variáveis de Integração ---
+        let activeReportsLayer, slowTrafficPolyline;
+        let currentAuthUser = null;
+        let lastSelectedReportId = null;
+        let userReportVotes = {}; // Cache local de votos
+
+        // Configurações Legadas
         let config = { theme: 'auto', vision: 'auto' };
 
         const RADAR_DATA = {
@@ -277,6 +413,297 @@
             traffic_light: { title: "Radar de Semáforo", desc: "Captura avanço de sinal vermelho.", lesson: "Protege sua vida de colisões laterais.", type: "TRÂNSITO", icon: "traffic-light", class: "radar-traffic" },
             bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
+
+        // --- Lógica de Login e Autenticação ---
+        function initiateReport() {
+            if (currentAuthUser) {
+                toggleReportPanel(true);
+            } else {
+                toggleLogin(true);
+            }
+        }
+
+        function toggleLogin(show) {
+            document.getElementById('login-screen').style.display = show ? 'flex' : 'none';
+        }
+
+        function toggleReportPanel(show) {
+            document.getElementById('report-panel').style.display = show ? 'flex' : 'none';
+            backToMainReport();
+        }
+
+        async function handleLogin() {
+            document.getElementById('loader').style.display = 'flex';
+            try {
+                const result = await window.fb.signInWithPopup(window.fb.auth, window.fb.provider);
+                currentAuthUser = result.user;
+                toggleLogin(false);
+                toggleReportPanel(true);
+            } catch (error) {
+                console.error("Login failed", error);
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        // --- Lógica de Reports (Firebase) ---
+        function openRadarSubMenu() {
+            document.getElementById('main-report-grid').classList.add('hidden');
+            document.getElementById('radar-submenu').classList.remove('hidden');
+        }
+
+        function backToMainReport() {
+            document.getElementById('main-report-grid').classList.remove('hidden');
+            document.getElementById('radar-submenu').classList.add('hidden');
+        }
+
+        async function submitReport(type, subtype = "") {
+            if (!userPos) return;
+
+            // Timestamp de expiração (5 meses para faixa bloqueada, 4h para outros por padrão)
+            let expiryDays = (type === 'Faixa Bloqueada') ? 150 : 0.16;
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + expiryDays);
+
+            const reportData = {
+                type: type,
+                subtype: subtype,
+                lat: userPos[0],
+                lng: userPos[1],
+                creator: currentAuthUser.uid,
+                createdAt: window.fb.serverTimestamp(),
+                expiresAt: expiryDate,
+                votes: [],
+                status: 'active'
+            };
+
+            try {
+                const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
+                await window.fb.setDoc(window.fb.doc(reportsRef, `${Date.now()}_${currentAuthUser.uid}`), reportData);
+                toggleReportPanel(false);
+                
+                if(type === 'Trânsito Lento') {
+                    animateSlowTrafficLine();
+                }
+            } catch (e) {
+                console.error("Erro ao salvar report", e);
+            }
+        }
+
+        function animateSlowTrafficLine() {
+            if (!routingControl || !routingControl._selectedRoute) return;
+            const coords = routingControl._selectedRoute.coordinates;
+            
+            if (slowTrafficPolyline) map.removeLayer(slowTrafficPolyline);
+            
+            slowTrafficPolyline = L.polyline(coords, {
+                color: 'red',
+                weight: 5,
+                opacity: 0.6,
+                dashArray: '10, 10'
+            }).addTo(map);
+
+            let offset = 0;
+            const anim = setInterval(() => {
+                offset++;
+                if (!slowTrafficPolyline) clearInterval(anim);
+                else slowTrafficPolyline.setStyle({ dashOffset: -offset * 2 });
+            }, 50);
+
+            setTimeout(() => {
+                if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
+            }, 60000);
+        }
+
+        // Monitoramento em tempo real dos reports no Firebase
+        function listenToReports() {
+            const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
+            window.fb.onSnapshot(window.fb.query(reportsRef), (snapshot) => {
+                activeReportsLayer.clearLayers();
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const id = doc.id;
+                    
+                    // Verificar expiração
+                    if (data.expiresAt.toDate() < new Date()) return;
+
+                    const markerColor = getReportColor(data.type);
+                    const markerIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14" style="margin: 5px"></i></div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+
+                    const marker = L.marker([data.lat, data.lng], { icon: markerIcon }).on('click', () => {
+                        showReportDetail(id, data);
+                    });
+                    
+                    marker.addTo(activeReportsLayer);
+                    lucide.createIcons();
+                });
+            });
+        }
+
+        function getReportColor(type) {
+            switch(type) {
+                case 'Polícia': return '#3b82f6';
+                case 'Obras': return '#f97316';
+                case 'Radar': return '#A855F7';
+                case 'Faixa Bloqueada': return '#ef4444';
+                default: return '#eab308';
+            }
+        }
+
+        function getReportIcon(type) {
+            switch(type) {
+                case 'Polícia': return 'shield-alert';
+                case 'Obras': return 'construction';
+                case 'Radar': return 'radar';
+                case 'Faixa Bloqueada': return 'octagon-x';
+                case 'Acidente': return 'car-front';
+                default: return 'clock';
+            }
+        }
+
+        function showReportDetail(id, data) {
+            lastSelectedReportId = id;
+            document.getElementById('alert-type').innerText = "REPORT DE USUÁRIO";
+            document.getElementById('alert-title').innerText = `${data.type} ${data.subtype}`;
+            document.getElementById('alert-desc-text').innerText = getReportDesc(data.type);
+            document.getElementById('creator-id').innerText = data.creator;
+            
+            const iconBox = document.getElementById('alert-icon-box');
+            iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6`;
+            iconBox.style.backgroundColor = getReportColor(data.type);
+            iconBox.innerHTML = `<i data-lucide="${getReportIcon(data.type)}" color="white" size="32"></i>`;
+            
+            document.getElementById('report-meta').classList.remove('hidden');
+            
+            // Validar Proximidade (400 metros)
+            const dist = getDistance(userPos, [data.lat, data.lng]);
+            const isNear = dist < 400;
+            const isBlockedLane = data.type === 'Faixa Bloqueada';
+
+            const btnNotExists = document.getElementById('btn-not-exists');
+            const btnStillThere = document.getElementById('btn-still-there');
+
+            btnStillThere.disabled = !isNear;
+            btnStillThere.style.opacity = isNear ? '1' : '0.3';
+            
+            // Faixa Bloqueada permite reportar inexistência de qualquer lugar conforme solicitado
+            btnNotExists.disabled = !(isNear || isBlockedLane);
+            btnNotExists.style.opacity = (isNear || isBlockedLane) ? '1' : '0.3';
+
+            lucide.createIcons();
+            document.getElementById('alert-modal').style.display = 'flex';
+        }
+
+        function getReportDesc(type) {
+            switch(type) {
+                case 'Polícia': return "Blitz ou patrulhamento relatado por outro usuário.";
+                case 'Faixa Bloqueada': return "Bloqueio total ou parcial da via. Pode persistir por meses.";
+                default: return "Cuidado ao transitar por este trecho.";
+            }
+        }
+
+async function voteReport(isPositive) {
+    if (!window.fb.auth.currentUser || !lastSelectedReportId) {
+        alert("Sessão inválida ou report não selecionado.");
+        return;
+    }
+
+    const userId = window.fb.auth.currentUser.uid;
+    const voteType = isPositive ? 'exists' : 'not_exists';
+    
+    // Referências seguindo a REGRA 1 (Caminhos estritos do ambiente)
+    const reportRef = window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports', lastSelectedReportId);
+    const userVoteRef = window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports', lastSelectedReportId, 'userVotes', userId);
+
+    try {
+        // Usamos runTransaction para garantir atomicidade e segurança
+        await window.fb.runTransaction(window.fb.db, async (transaction) => {
+            const reportSnap = await transaction.get(reportRef);
+            const userVoteSnap = await transaction.get(userVoteRef);
+
+            if (!reportSnap.exists()) throw "Report não encontrado no banco.";
+
+            const reportData = reportSnap.data();
+            const userVoteData = userVoteSnap.exists() ? userVoteSnap.data() : { count: 0, type: null };
+
+            // Verificação de TIPO (Não pode votar nos dois)
+            if (userVoteData.type && userVoteData.type !== voteType) {
+                throw `Você já votou em "${userVoteData.type === 'exists' ? 'Ainda está lá' : 'Não existe'}". Escolha apenas uma categoria.`;
+            }
+
+            // Verificação de QUANTIDADE (Limite de 2)
+            if (userVoteData.count >= 2) {
+                throw "Limite de 2 votos atingido para este report.";
+            }
+
+            const newCount = userVoteData.count + 1;
+
+            // 1. Atualiza o registro de controle do usuário (Trava)
+            transaction.set(userVoteRef, {
+                count: newCount,
+                type: voteType,
+                userId: userId,
+                lastUpdate: window.fb.serverTimestamp()
+            }, { merge: true });
+
+            // 2. Atualiza o contador global no Report
+            const fieldToIncrement = isPositive ? 'votes_exists' : 'votes_not_exists';
+            const currentGlobalVotes = reportData[fieldToIncrement] || 0;
+            
+            transaction.update(reportRef, {
+                [fieldToIncrement]: currentGlobalVotes + 1,
+                // Mantemos o array de uids para compatibilidade de leitura se necessário
+                votes: window.fb.arrayUnion(userId) 
+            });
+
+            // Lógica de expiração dinâmica (Sua regra original de redução de tempo)
+            if (!isPositive) {
+                const currentExpiry = reportData.expiresAt.toDate();
+                const newExpiry = new Date(currentExpiry);
+                if (reportData.type === 'Faixa Bloqueada') {
+                    newExpiry.setDate(newExpiry.getDate() - 15); // Reduz 15 dias por voto negativo
+                } else {
+                    newExpiry.setMinutes(newExpiry.getMinutes() - 30);
+                }
+                transaction.update(reportRef, { expiresAt: newExpiry });
+            }
+        });
+
+        closeAlertModal();
+        // Feedback visual de sucesso sem usar alert()
+        console.log("Voto computado com sucesso!");
+
+    } catch (e) {
+        console.error("Falha na transação de voto:", e);
+        // Exibe o erro amigável para o usuário (ex: se bater o limite de 2)
+        const errorMsg = e.toString().replace("Error:", "");
+        document.getElementById('alert-desc-text').innerText = errorMsg;
+        document.getElementById('alert-desc-text').classList.add('text-red-500');
+    }
+}
+
+        // Alertas de Proximidade em tempo real
+        function checkNearbyReports(coords) {
+            activeReportsLayer.eachLayer(layer => {
+                const reportLatLng = layer.getLatLng();
+                const dist = getDistance(coords, [reportLatLng.lat, reportLatLng.lng]);
+                
+                if (dist < 300) {
+                   // Notificação simples no topo se não estiver com modal aberto
+                   if(document.getElementById('alert-modal').style.display !== 'flex') {
+                       document.getElementById('inst-text').innerText = "ATENÇÃO: Evento Próximo!";
+                       document.getElementById('inst-dist').innerText = `A ${Math.round(dist)}m`;
+                   }
+                }
+            });
+        }
+
+        // --- Funções Originais Mantidas ---
 
         function loadConfig() {
             const saved = localStorage.getItem('catsblock_cfg');
@@ -345,7 +772,6 @@
         lucide.createIcons();
         loadConfig();
 
-        // Checagem imediata de URL para decidir se remove a splash logo no início
         const urlParams = new URLSearchParams(window.location.search);
         const hasRoute = urlParams.get('lat') && urlParams.get('lng');
 
@@ -358,29 +784,36 @@
             });
         }
 
-        // Se o link for compartilhado, podemos tentar dar unlock automático se o usuário já tiver permitido GPS antes
         if (hasRoute) {
-            // Tenta obter permissão silenciosa ou forçar o clique se falhar
             navigator.geolocation.getCurrentPosition(pos => {
                 document.getElementById('splash').style.display = 'none';
                 init(pos.coords.latitude, pos.coords.longitude);
-            }, () => {
-                // Se falhar ou precisar de interação, o botão "Entrar e Navegar" ainda estará lá
-            });
+            }, () => {});
         }
 
         function init(lat, lng) {
             userPos = [lat, lng];
-            if (map) return; // Evita inicializar duas vezes
+            if (map) return; 
 
             map = L.map('map', { zoomControl: false, attributionControl: false, touchRotate: true }).setView(userPos, 19);
             tileLayer = L.tileLayer('', {}).addTo(map);
             applyTheme();
             alertLayer = L.layerGroup().addTo(map);
+            
+            // Nova Layer para reports dinâmicos
+            activeReportsLayer = L.layerGroup().addTo(map);
+            
             updateUserMarker(userPos, 0, false);
             fetchAlerts();
+            
+            // Inicia escuta do Firebase após carregar o mapa
+            const checkFB = setInterval(() => {
+                if (window.fb) {
+                    listenToReports();
+                    clearInterval(checkFB);
+                }
+            }, 500);
 
-            // Lógica de recebimento de link compartilhado
             const shareLat = urlParams.get('lat');
             const shareLng = urlParams.get('lng');
             const startLat = urlParams.get('slat');
@@ -413,6 +846,7 @@
                     lastApiPos = coords;
                 }
 
+                checkNearbyReports(coords);
                 animate(coords);
                 if (isNavigating) updateNavigation();
                 prevPos = coords;
@@ -454,6 +888,7 @@
         }
 
         function showRadarModal(info) {
+            document.getElementById('report-meta').classList.add('hidden');
             document.getElementById('radar-lesson').classList.remove('hidden');
             document.getElementById('lesson-text').innerText = info.lesson;
             showAlertModal(info.type, info.title, info.desc, info.icon);
@@ -475,7 +910,11 @@
             document.getElementById('alert-modal').style.display = 'flex';
         }
 
-        function closeAlertModal() { document.getElementById('alert-modal').style.display = 'none'; document.getElementById('radar-lesson').classList.add('hidden'); }
+        function closeAlertModal() { 
+            document.getElementById('alert-modal').style.display = 'none'; 
+            document.getElementById('radar-lesson').classList.add('hidden'); 
+            document.getElementById('report-meta').classList.add('hidden'); 
+        }
 
         function setTravelMode(mode) {
             travelMode = mode;
@@ -554,9 +993,7 @@
 
         function shareTrip() {
             if(!destinationLatLng || !userPos) return;
-            
-            // Usando o domínio oficial catsblock-car.pages.dev
-            const baseUrl = "https://catsblock-car.pages.dev";
+            const baseUrl = window.location.origin;
             const shareUrl = `${baseUrl}/?lat=${destinationLatLng.lat}&lng=${destinationLatLng.lng}&slat=${userPos[0]}&slng=${userPos[1]}`;
             
             const el = document.createElement('textarea');
@@ -579,6 +1016,7 @@
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
             document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
+            document.getElementById('report-trigger-btn').style.bottom = start ? '320px' : '120px';
             
             if(start) {
                 userInteracting = false; 
@@ -605,7 +1043,6 @@
             if (destMarker) map.removeLayer(destMarker);
             document.getElementById('trip-card').classList.remove('active');
             routingControl = null; destinationLatLng = null;
-            // Limpa parâmetros da URL sem recarregar
             window.history.replaceState({}, '', '/');
         }
 
