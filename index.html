@@ -495,108 +495,84 @@
             document.getElementById('radar-submenu').classList.add('hidden');
         }
 
-        /**
- * Envia um reporte para o Firestore utilizando Write Batch.
- * Essencial para satisfazer as Security Rules que verificam o limite de spam
- * através do registro de 'recentReports' no documento do usuário.
- * 
- * @param {string} type - Tipo do evento (Polícia, Acidente, etc.)
- * @param {string} subtype - Detalhamento opcional (ex: Velocidade para Radar)
- */
 async function submitReport(type, subtype = "") {
-    // Validação de segurança inicial para evitar execuções órfãs
-    if (!userPos || !window.currentAuthUser) {
-        if (!window.currentAuthUser) toggleLogin(true);
+    // 1. Verificação de sanidade com feedback
+    if (!window.userPos) {
+        alert("Erro: Sua localização ainda não foi detectada no mapa.");
+        return;
+    }
+    if (!window.currentAuthUser) {
+        toggleLogin(true);
         return;
     }
 
-    // Extração de utilitários do Firebase instanciados globalmente
-    const { db, appId, doc, serverTimestamp, increment } = window.fb;
-    
-    // Importação dinâmica para garantir que as funções de lote estejam disponíveis no escopo do módulo
-    const { writeBatch, arrayUnion } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-    
-    const uid = window.currentAuthUser.uid;
-    const batch = writeBatch(db);
-
-    // Requisito 5: Lógica de expiração temporal baseada no tipo de evento
-    const now = new Date();
-    let expiryDate = new Date(now);
-
-    switch(type) {
-        case 'Polícia': 
-            expiryDate.setHours(now.getHours() + 5); 
-            break;
-        case 'Faixa Bloqueada': 
-            // Corrigido: setHours(4) em vez de setMonth(4). 
-            // Um bloqueio de faixa por 4 meses poluiria o mapa indefinidamente.
-            expiryDate.setHours(now.getHours() + 4); 
-            break;
-        case 'Acidente': 
-            expiryDate.setHours(now.getHours() + 2); 
-            break;
-        case 'Radar': 
-            // Radares são fixos/duradouros, portanto 1 ano de validade faz sentido.
-            expiryDate.setFullYear(now.getFullYear() + 1); 
-            break;
-        default: 
-            expiryDate.setHours(now.getHours() + 4); 
-    }
-
-    // Definição dos caminhos dos documentos
-    const docId = `rep_${Date.now()}_${uid}`;
-    const reportRef = doc(db, 'artifacts', appId, 'public', 'data', 'reports', docId);
-    const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', uid);
-
-    // Estrutura de dados do Report
-    const reportData = {
-        type: type,
-        subtype: subtype,
-        lat: userPos[0],
-        lng: userPos[1],
-        creator: uid,
-        createdAt: serverTimestamp(), // Marcador temporal oficial do servidor para validação de regras
-        expiresAt: expiryDate,
-        votes: {}, // Usamos Map {} em vez de Array [] para validação de ID única nas Rules
-        votes_exists: 0,
-        votes_not_exists: 0,
-        status: 'active'
-    };
-
-    /**
-     * OPERAÇÃO ATÔMICA (Write Batch)
-     * Para que a regra getAfter() no Firestore permita a gravação,
-     * a atualização do contador de spam do usuário deve ir no mesmo pacote.
-     */
-    
-    // 1. Comando de criação do report
-    batch.set(reportRef, reportData);
-
-    // 2. Comando de atualização do perfil do usuário para controle de SPAM
-    // Adiciona o timestamp atual ao array para que o getAfter() valide os últimos 3 reports
-    batch.set(userRef, {
-        recentReports: arrayUnion(serverTimestamp())
-    }, { merge: true });
+    // 2. Feedback visual de carregamento
+    const loader = document.getElementById('loader');
+    if (loader) loader.style.display = 'flex';
 
     try {
-        // Executa ambas as operações ou falha ambas se uma regra for violada
+        const { db, appId, doc, serverTimestamp } = window.fb;
+        
+        // Importação das funções de lote e array
+        const { writeBatch, arrayUnion } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+        
+        const uid = window.currentAuthUser.uid;
+        const batch = writeBatch(db);
+
+        // 3. Lógica de Expiração (Requisito 5)
+        const now = new Date();
+        let expiryDate = new Date(now);
+
+        switch(type) {
+            case 'Polícia': expiryDate.setHours(now.getHours() + 5); break;
+            case 'Faixa Bloqueada': expiryDate.setHours(now.getHours() + 4); break; 
+            case 'Acidente': expiryDate.setHours(now.getHours() + 2); break;
+            case 'Radar': expiryDate.setFullYear(now.getFullYear() + 1); break;
+            default: expiryDate.setHours(now.getHours() + 4);
+        }
+
+        const docId = `rep_${Date.now()}_${uid}`;
+        const reportRef = doc(db, 'artifacts', appId, 'public', 'data', 'reports', docId);
+        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', uid);
+
+        // 4. Montagem do lote (Batch)
+        batch.set(reportRef, {
+            type: type,
+            subtype: subtype,
+            lat: window.userPos[0],
+            lng: window.userPos[1],
+            creator: uid,
+            createdAt: serverTimestamp(),
+            expiresAt: expiryDate,
+            votes: {}, 
+            votes_exists: 0,
+            votes_not_exists: 0,
+            status: 'active'
+        });
+
+        // Atualiza os créditos de spam do usuário
+        batch.set(userRef, {
+            recentReports: arrayUnion(serverTimestamp())
+        }, { merge: true });
+
+        // 5. Execução atômica
         await batch.commit();
         
-        // UI Feedback e fechamento de menus
         toggleReportPanel(false);
-        
-        // Gatilho visual para trânsito lento, se aplicável
+        alert(`Sucesso! Seu reporte de ${type} foi enviado.`);
+
         if(type === 'Trânsito Lento' && typeof animateSlowTrafficLine === 'function') {
             animateSlowTrafficLine();
         }
-        
-        console.log(`[CatsBlock] Report de ${type} enviado com sucesso via Batch.`);
+
     } catch (e) {
-        // O erro aqui geralmente indica violação das Security Rules (ex: limite de 3 reports atingido)
-        console.error("Falha ao processar batch de reporte:", e);
-        alert("Não foi possível enviar o reporte. Verifique sua conexão ou se você atingiu o limite de envios temporários.");
+        console.error("Erro no envio do reporte:", e);
+        alert("Falha no servidor: " + e.message);
+    } finally {
+        if (loader) loader.style.display = 'none';
     }
 }
+        
         
 
         function animateSlowTrafficLine() {
