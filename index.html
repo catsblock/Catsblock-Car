@@ -29,7 +29,7 @@
         const app = initializeApp(firebaseConfig);
         const appCheck = initializeAppCheck(app, {
   provider: new ReCaptchaV3Provider('6Ldh1OgsAAAAAPkNl2kYntMyf-M2o-m4guxVx9rl'),
-  isTokenAutoRefreshEnabled: true // Atualiza o token automaticamente para o usuário não ser bloqueado
+  isTokenAutoRefreshEnabled: true
 });
         const db = getFirestore(app);
         const auth = getAuth(app);
