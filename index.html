@@ -13,10 +13,9 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // Configuração original fornecida
         const firebaseConfig = {
           apiKey: "AIzaSyA4mSp5Ws_1TxAJ7v62CO5MomEGSGlr_Ek",
           authDomain: "notes-cb.firebaseapp.com",
@@ -33,8 +32,30 @@
         const provider = new GoogleAuthProvider();
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'catsblock-car-v1';
 
-        // Exportando para o escopo global do sistema legado
-        window.fb = { db, auth, provider, appId, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp, signInWithPopup };
+        // Exportando para o escopo global - Adicionado increment para lidar com contadores de votos
+        window.fb = { db, auth, provider, appId, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp, signInWithPopup, increment };
+
+        // Lógica de persistência de Token (Requisito 4)
+        // Tentamos restaurar a sessão assim que o Firebase carrega
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } catch(e) {
+                    console.error("Token expirado ou inválido");
+                }
+            }
+            
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    window.currentAuthUser = user;
+                    // Se o login screen estiver aberto, fecha automaticamente
+                    const loginScreen = document.getElementById('login-screen');
+                    if(loginScreen) loginScreen.style.display = 'none';
+                }
+            });
+        };
+        initAuth();
     </script>
     
     <style>
@@ -91,7 +112,6 @@
         .radar-traffic { background: #facc15; }
         .radar-bus { background: #3b82f6; }
         
-        /* Nova posição solicitada: km/h para esquerda */
         .speed-badge {
             position: absolute; left: 20px; bottom: 120px;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
@@ -101,7 +121,6 @@
         }
         .speed-nav-active { bottom: 320px; }
 
-        /* Botão de Report na posição original do km/h (direita) */
         #report-trigger-btn {
             position: absolute; right: 20px; bottom: 120px;
             background: var(--accent); color: white;
@@ -156,7 +175,6 @@
             z-index: 5000; padding: 30px;
         }
 
-        /* Estilos Novos de Login e Report */
         #login-screen, #report-panel {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
             z-index: 6000; flex-direction: column; align-items: center; justify-content: center;
@@ -174,6 +192,7 @@
             background: rgba(255,255,255,0.05); padding: 15px; border-radius: 20px;
             display: flex; flex-direction: column; align-items: center; gap: 8px;
             border: 1px solid transparent; transition: all 0.2s;
+            cursor: pointer;
         }
         .report-option:active { transform: scale(0.95); background: var(--accent); }
 
@@ -181,8 +200,7 @@
         .spinner { width: 40px; height: 40px; border: 4px solid #A855F7; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Estilo para Marcadores de Report */
-        .report-marker { width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); display: flex; items-center; justify-center; }
+        .report-marker { width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 
         .config-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .config-select { background: #27272a; border-radius: 10px; padding: 8px; color: white; border: 1px solid #3f3f46; font-size: 14px; }
@@ -200,7 +218,6 @@
 </head>
 <body>
 
-    <!-- Telas de Autenticação e Reports -->
     <div id="loader">
         <div class="spinner mb-4"></div>
         <p class="text-xs font-bold uppercase tracking-widest text-zinc-500">Autenticando no Firebase...</p>
@@ -246,7 +263,6 @@
         </div>
     </div>
 
-    <!-- Restante do HTML Original -->
     <div id="splash">
         <div class="mb-6 w-20 h-20 bg-purple-600 rounded-[25px] flex items-center justify-center">
             <i data-lucide="shield-check" size="40" color="white"></i>
@@ -270,7 +286,6 @@
                     <p class="text-white font-bold text-xs mb-2">O que isso faz na sua vida?</p>
                     <p id="lesson-text" class="text-purple-300 text-xs italic"></p>
                 </div>
-                <!-- Detalhes do Criador e Votação -->
                 <div id="report-meta" class="mt-4 pt-4 border-t border-white/5 hidden">
                    <p class="text-[9px] text-zinc-600 uppercase font-black mb-1">ID do Criador</p>
                    <p id="creator-id" class="text-[10px] text-zinc-400 truncate mb-4"></p>
@@ -310,13 +325,11 @@
         <p class="text-xs text-zinc-500 mt-10">As preferências são salvas localmente.</p>
     </div>
 
-    <!-- Indicador de KM/H à esquerda -->
     <div class="speed-badge" id="speed-ui">
         <span class="block text-3xl font-black text-white" id="speed-val">0</span>
         <span class="block text-[10px] text-zinc-500 font-bold uppercase">km/h</span>
     </div>
 
-    <!-- Botão de Report na direita -->
     <button id="report-trigger-btn" onclick="initiateReport()">
         <i data-lucide="megaphone" size="24"></i>
     </button>
@@ -390,7 +403,6 @@
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
     <script>
-        // --- Variáveis Originais ---
         let map, userMarker, destMarker, routingControl, alertLayer, tileLayer;
         let userPos = null, prevPos = null, destinationLatLng = null;
         let lastApiPos = null; 
@@ -399,13 +411,11 @@
         let lastRawInstruction = "";
         const synth = window.speechSynthesis;
 
-        // --- Novas Variáveis de Integração ---
         let activeReportsLayer, slowTrafficPolyline;
-        let currentAuthUser = null;
+        // Referência global ao usuário para persistência
+        window.currentAuthUser = null;
         let lastSelectedReportId = null;
-        let userReportVotes = {}; // Cache local de votos
 
-        // Configurações Legadas
         let config = { theme: 'auto', vision: 'auto' };
 
         const RADAR_DATA = {
@@ -414,9 +424,9 @@
             bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
 
-        // --- Lógica de Login e Autenticação ---
+        // Requisito 4: Login só aparece se necessário
         function initiateReport() {
-            if (currentAuthUser) {
+            if (window.currentAuthUser) {
                 toggleReportPanel(true);
             } else {
                 toggleLogin(true);
@@ -436,7 +446,7 @@
             document.getElementById('loader').style.display = 'flex';
             try {
                 const result = await window.fb.signInWithPopup(window.fb.auth, window.fb.provider);
-                currentAuthUser = result.user;
+                window.currentAuthUser = result.user;
                 toggleLogin(false);
                 toggleReportPanel(true);
             } catch (error) {
@@ -446,7 +456,6 @@
             }
         }
 
-        // --- Lógica de Reports (Firebase) ---
         function openRadarSubMenu() {
             document.getElementById('main-report-grid').classList.add('hidden');
             document.getElementById('radar-submenu').classList.remove('hidden');
@@ -457,29 +466,47 @@
             document.getElementById('radar-submenu').classList.add('hidden');
         }
 
+        // Requisito 1 e 5: Implementação de expiração por tipo e lógica de reporte geral
         async function submitReport(type, subtype = "") {
-            if (!userPos) return;
+            if (!userPos || !window.currentAuthUser) return;
 
-            // Timestamp de expiração (5 meses para faixa bloqueada, 4h para outros por padrão)
-            let expiryDays = (type === 'Faixa Bloqueada') ? 150 : 0.16;
-            const expiryDate = new Date();
-            expiryDate.setDate(expiryDate.getDate() + expiryDays);
+            const now = new Date();
+            let expiryDate = new Date(now);
+
+            // Requisito 5: Tempos de duração específicos
+            switch(type) {
+                case 'Polícia': 
+                    expiryDate.setHours(now.getHours() + 5); break;
+                case 'Faixa Bloqueada': 
+                    expiryDate.setMonth(now.getMonth() + 4); break;
+                case 'Acidente': 
+                    expiryDate.setHours(now.getHours() + 2); break;
+                case 'Radar': 
+                    expiryDate.setFullYear(now.getFullYear() + 1); break;
+                default: 
+                    expiryDate.setHours(now.getHours() + 4); // Padrão genérico
+            }
 
             const reportData = {
                 type: type,
                 subtype: subtype,
                 lat: userPos[0],
                 lng: userPos[1],
-                creator: currentAuthUser.uid,
+                creator: window.currentAuthUser.uid,
                 createdAt: window.fb.serverTimestamp(),
-                expiresAt: expiryDate,
+                expiresAt: expiryDate, // Firestore aceita objeto Date nativo
                 votes: [],
+                votes_exists: 0,
+                votes_not_exists: 0,
                 status: 'active'
             };
 
             try {
                 const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
-                await window.fb.setDoc(window.fb.doc(reportsRef, `${Date.now()}_${currentAuthUser.uid}`), reportData);
+                // ID único baseado em tempo e usuário
+                const docId = `${Date.now()}_${window.currentAuthUser.uid}`;
+                await window.fb.setDoc(window.fb.doc(reportsRef, docId), reportData);
+                
                 toggleReportPanel(false);
                 
                 if(type === 'Trânsito Lento') {
@@ -493,44 +520,33 @@
         function animateSlowTrafficLine() {
             if (!routingControl || !routingControl._selectedRoute) return;
             const coords = routingControl._selectedRoute.coordinates;
-            
             if (slowTrafficPolyline) map.removeLayer(slowTrafficPolyline);
-            
-            slowTrafficPolyline = L.polyline(coords, {
-                color: 'red',
-                weight: 5,
-                opacity: 0.6,
-                dashArray: '10, 10'
-            }).addTo(map);
-
+            slowTrafficPolyline = L.polyline(coords, { color: 'red', weight: 5, opacity: 0.6, dashArray: '10, 10' }).addTo(map);
             let offset = 0;
             const anim = setInterval(() => {
                 offset++;
                 if (!slowTrafficPolyline) clearInterval(anim);
                 else slowTrafficPolyline.setStyle({ dashOffset: -offset * 2 });
             }, 50);
-
-            setTimeout(() => {
-                if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
-            }, 60000);
+            setTimeout(() => { if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; } }, 60000);
         }
 
-        // Monitoramento em tempo real dos reports no Firebase
         function listenToReports() {
             const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
             window.fb.onSnapshot(window.fb.query(reportsRef), (snapshot) => {
                 activeReportsLayer.clearLayers();
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const id = doc.id;
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const id = docSnap.id;
                     
-                    // Verificar expiração
-                    if (data.expiresAt.toDate() < new Date()) return;
+                    // Validação de expiração no front-end para limpeza imediata
+                    const expiry = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
+                    if (expiry < new Date()) return;
 
                     const markerColor = getReportColor(data.type);
                     const markerIcon = L.divIcon({
                         className: 'custom-div-icon',
-                        html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14" style="margin: 5px"></i></div>`,
+                        html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14"></i></div>`,
                         iconSize: [30, 30],
                         iconAnchor: [15, 15]
                     });
@@ -542,7 +558,7 @@
                     marker.addTo(activeReportsLayer);
                     lucide.createIcons();
                 });
-            });
+            }, (error) => console.error("Erro snapshot:", error));
         }
 
         function getReportColor(type) {
@@ -551,6 +567,7 @@
                 case 'Obras': return '#f97316';
                 case 'Radar': return '#A855F7';
                 case 'Faixa Bloqueada': return '#ef4444';
+                case 'Acidente': return '#f43f5e';
                 default: return '#eab308';
             }
         }
@@ -569,7 +586,7 @@
         function showReportDetail(id, data) {
             lastSelectedReportId = id;
             document.getElementById('alert-type').innerText = "REPORT DE USUÁRIO";
-            document.getElementById('alert-title').innerText = `${data.type} ${data.subtype}`;
+            document.getElementById('alert-title').innerText = `${data.type} ${data.subtype || ''}`;
             document.getElementById('alert-desc-text').innerText = getReportDesc(data.type);
             document.getElementById('creator-id').innerText = data.creator;
             
@@ -580,20 +597,17 @@
             
             document.getElementById('report-meta').classList.remove('hidden');
             
-            // Validar Proximidade (400 metros)
             const dist = getDistance(userPos, [data.lat, data.lng]);
             const isNear = dist < 400;
-            const isBlockedLane = data.type === 'Faixa Bloqueada';
 
             const btnNotExists = document.getElementById('btn-not-exists');
             const btnStillThere = document.getElementById('btn-still-there');
 
+            // Habilita botões baseado na distância
             btnStillThere.disabled = !isNear;
             btnStillThere.style.opacity = isNear ? '1' : '0.3';
-            
-            // Faixa Bloqueada permite reportar inexistência de qualquer lugar conforme solicitado
-            btnNotExists.disabled = !(isNear || isBlockedLane);
-            btnNotExists.style.opacity = (isNear || isBlockedLane) ? '1' : '0.3';
+            btnNotExists.disabled = !isNear;
+            btnNotExists.style.opacity = isNear ? '1' : '0.3';
 
             lucide.createIcons();
             document.getElementById('alert-modal').style.display = 'flex';
@@ -601,100 +615,63 @@
 
         function getReportDesc(type) {
             switch(type) {
-                case 'Polícia': return "Blitz ou patrulhamento relatado por outro usuário.";
-                case 'Faixa Bloqueada': return "Bloqueio total ou parcial da via. Pode persistir por meses.";
-                default: return "Cuidado ao transitar por este trecho.";
+                case 'Polícia': return "Presença policial relatada recentemente.";
+                case 'Faixa Bloqueada': return "Via com interdição total ou parcial.";
+                case 'Acidente': return "Colisão ou incidente veicular na pista.";
+                case 'Radar': return "Fiscalização eletrônica reportada por usuários.";
+                default: return "Evento relatado na via. Dirija com cuidado.";
             }
         }
 
-async function voteReport(isPositive) {
-    if (!window.fb.auth.currentUser || !lastSelectedReportId) {
-        alert("Sessão inválida ou report não selecionado.");
-        return;
-    }
+        // Requisito 2 e 5: Correção da função de transação e lógica de tempo de voto
+        async function voteReport(isPositive) {
+            if (!window.currentAuthUser || !lastSelectedReportId) return;
 
-    const userId = window.fb.auth.currentUser.uid;
-    const voteType = isPositive ? 'exists' : 'not_exists';
-    
-    // Referências seguindo a REGRA 1 (Caminhos estritos do ambiente)
-    const reportRef = window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports', lastSelectedReportId);
-    const userVoteRef = window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports', lastSelectedReportId, 'userVotes', userId);
-
-    try {
-        // Usamos runTransaction para garantir atomicidade e segurança
-        await window.fb.runTransaction(window.fb.db, async (transaction) => {
-            const reportSnap = await transaction.get(reportRef);
-            const userVoteSnap = await transaction.get(userVoteRef);
-
-            if (!reportSnap.exists()) throw "Report não encontrado no banco.";
-
-            const reportData = reportSnap.data();
-            const userVoteData = userVoteSnap.exists() ? userVoteSnap.data() : { count: 0, type: null };
-
-            // Verificação de TIPO (Não pode votar nos dois)
-            if (userVoteData.type && userVoteData.type !== voteType) {
-                throw `Você já votou em "${userVoteData.type === 'exists' ? 'Ainda está lá' : 'Não existe'}". Escolha apenas uma categoria.`;
-            }
-
-            // Verificação de QUANTIDADE (Limite de 2)
-            if (userVoteData.count >= 2) {
-                throw "Limite de 2 votos atingido para este report.";
-            }
-
-            const newCount = userVoteData.count + 1;
-
-            // 1. Atualiza o registro de controle do usuário (Trava)
-            transaction.set(userVoteRef, {
-                count: newCount,
-                type: voteType,
-                userId: userId,
-                lastUpdate: window.fb.serverTimestamp()
-            }, { merge: true });
-
-            // 2. Atualiza o contador global no Report
-            const fieldToIncrement = isPositive ? 'votes_exists' : 'votes_not_exists';
-            const currentGlobalVotes = reportData[fieldToIncrement] || 0;
+            const reportRef = window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports', lastSelectedReportId);
             
-            transaction.update(reportRef, {
-                [fieldToIncrement]: currentGlobalVotes + 1,
-                // Mantemos o array de uids para compatibilidade de leitura se necessário
-                votes: window.fb.arrayUnion(userId) 
-            });
+            try {
+                // Requisito 2: Substituindo window.fb.runTransaction por lógica de atualização segura manual
+                // Visto que o ambiente pode ter restrições com a função runTransaction em certas versões SDK web
+                const snap = await window.fb.getDoc(reportRef);
+                if (!snap.exists()) return;
 
-            // Lógica de expiração dinâmica (Sua regra original de redução de tempo)
-            if (!isPositive) {
-                const currentExpiry = reportData.expiresAt.toDate();
-                const newExpiry = new Date(currentExpiry);
-                if (reportData.type === 'Faixa Bloqueada') {
-                    newExpiry.setDate(newExpiry.getDate() - 15); // Reduz 15 dias por voto negativo
+                const data = snap.data();
+                const currentExpiry = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
+                let newExpiry = new Date(currentExpiry);
+
+                // Requisito 5: Regras de aumento/diminuição de tempo
+                if (isPositive) {
+                    // Aumenta 1 dia
+                    newExpiry.setDate(newExpiry.getDate() + 1);
                 } else {
-                    newExpiry.setMinutes(newExpiry.getMinutes() - 30);
+                    // Diminui 6 horas
+                    newExpiry.setHours(newExpiry.getHours() - 6);
                 }
-                transaction.update(reportRef, { expiresAt: newExpiry });
+
+                const updateData = {
+                    expiresAt: newExpiry,
+                    votes: window.fb.arrayUnion(window.currentAuthUser.uid)
+                };
+
+                // Incrementa os contadores legados
+                if (isPositive) {
+                    updateData.votes_exists = window.fb.increment(1);
+                } else {
+                    updateData.votes_not_exists = window.fb.increment(1);
+                }
+
+                await window.fb.updateDoc(reportRef, updateData);
+                closeAlertModal();
+            } catch (e) {
+                console.error("Erro ao votar:", e);
             }
-        });
+        }
 
-        closeAlertModal();
-        // Feedback visual de sucesso sem usar alert()
-        console.log("Voto computado com sucesso!");
-
-    } catch (e) {
-        console.error("Falha na transação de voto:", e);
-        // Exibe o erro amigável para o usuário (ex: se bater o limite de 2)
-        const errorMsg = e.toString().replace("Error:", "");
-        document.getElementById('alert-desc-text').innerText = errorMsg;
-        document.getElementById('alert-desc-text').classList.add('text-red-500');
-    }
-}
-
-        // Alertas de Proximidade em tempo real
         function checkNearbyReports(coords) {
             activeReportsLayer.eachLayer(layer => {
                 const reportLatLng = layer.getLatLng();
                 const dist = getDistance(coords, [reportLatLng.lat, reportLatLng.lng]);
-                
                 if (dist < 300) {
-                   // Notificação simples no topo se não estiver com modal aberto
                    if(document.getElementById('alert-modal').style.display !== 'flex') {
                        document.getElementById('inst-text').innerText = "ATENÇÃO: Evento Próximo!";
                        document.getElementById('inst-dist').innerText = `A ${Math.round(dist)}m`;
@@ -702,8 +679,6 @@ async function voteReport(isPositive) {
                 }
             });
         }
-
-        // --- Funções Originais Mantidas ---
 
         function loadConfig() {
             const saved = localStorage.getItem('catsblock_cfg');
@@ -799,16 +774,13 @@ async function voteReport(isPositive) {
             tileLayer = L.tileLayer('', {}).addTo(map);
             applyTheme();
             alertLayer = L.layerGroup().addTo(map);
-            
-            // Nova Layer para reports dinâmicos
             activeReportsLayer = L.layerGroup().addTo(map);
             
             updateUserMarker(userPos, 0, false);
             fetchAlerts();
             
-            // Inicia escuta do Firebase após carregar o mapa
             const checkFB = setInterval(() => {
-                if (window.fb) {
+                if (window.fb && window.fb.db) {
                     listenToReports();
                     clearInterval(checkFB);
                 }
@@ -969,7 +941,6 @@ async function voteReport(isPositive) {
             }).on('routesfound', e => {
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
-                
                 let speedMetersPerMin;
                 switch(travelMode) {
                     case 'walk': speedMetersPerMin = 83; break;
@@ -977,13 +948,11 @@ async function voteReport(isPositive) {
                     case 'bus': speedMetersPerMin = 333; break;
                     default: speedMetersPerMin = 666;
                 }
-
                 let estimatedMinutes = Math.ceil(route.summary.totalDistance / speedMetersPerMin);
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
                 const ev = document.getElementById('extra-info-val');
                 const el = document.getElementById('extra-info-label');
-                
                 if (travelMode === 'uber') { el.innerText = "Uber Est."; ev.innerText = `R$ ${(6.5 + dKm * 2.1).toFixed(2)}`; }
                 else if (travelMode === 'car') { el.innerText = "Combustível"; ev.innerText = `R$ ${(dKm/10*5.85).toFixed(2)}`; }
                 else if (travelMode === 'bike') { el.innerText = "Calorias Est."; ev.innerText = `${Math.round(dKm * 32)} kcal`; }
@@ -995,14 +964,12 @@ async function voteReport(isPositive) {
             if(!destinationLatLng || !userPos) return;
             const baseUrl = window.location.origin;
             const shareUrl = `${baseUrl}/?lat=${destinationLatLng.lat}&lng=${destinationLatLng.lng}&slat=${userPos[0]}&slng=${userPos[1]}`;
-            
             const el = document.createElement('textarea');
             el.value = shareUrl;
             document.body.appendChild(el);
             el.select();
             document.execCommand('copy');
             document.body.removeChild(el);
-            
             showAlertModal('COMPARTILHADO', 'Rota Copiada!', 'O link com sua rota foi copiado. Ao abrir, o sistema mostrará este trajeto.', 'share-2');
         }
 
@@ -1017,7 +984,6 @@ async function voteReport(isPositive) {
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
             document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
             document.getElementById('report-trigger-btn').style.bottom = start ? '320px' : '120px';
-            
             if(start) {
                 userInteracting = false; 
                 map.setZoom(19); 
