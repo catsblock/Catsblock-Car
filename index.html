@@ -495,105 +495,56 @@
             document.getElementById('radar-submenu').classList.add('hidden');
         }
 
-/**
- * SUBMITREPORT - VERSÃO CORRIGIDA E OTIMIZADA
- * Remove o bloqueio de 'localização não detectada' e limpa a execução do lote.
- */
-async function submitReport(type, subtype = "") {
-    // Verificação simplificada: Se o mapa existe e o Leaflet está ativo, 
-    // tentamos extrair a posição diretamente do mapa caso window.userPos falhe.
-    const position = window.userPos || (window.map && window.map.getCenter ? [window.map.getCenter().lat, window.map.getCenter().lng] : null);
+        // Requisito 1 e 5: Implementação de expiração por tipo e lógica de reporte geral
+        async function submitReport(type, subtype = "") {
+            if (!userPos || !window.currentAuthUser) return;
 
-    if (!position) {
-        // Se mesmo tentando pegar do centro do mapa falhar, aí sim avisamos.
-        console.error("GPS Signal missing");
-        return;
-    }
+            const now = new Date();
+            let expiryDate = new Date(now);
 
-    if (!window.currentAuthUser) {
-        if (typeof toggleLogin === 'function') toggleLogin(true);
-        return;
-    }
+            // Requisito 5: Tempos de duração específicos
+            switch(type) {
+                case 'Polícia': 
+                    expiryDate.setHours(now.getHours() + 5); break;
+                case 'Faixa Bloqueada': 
+                    expiryDate.setMonth(now.getMonth() + 4); break;
+                case 'Acidente': 
+                    expiryDate.setHours(now.getHours() + 2); break;
+                case 'Radar': 
+                    expiryDate.setFullYear(now.getFullYear() + 1); break;
+                default: 
+                    expiryDate.setHours(now.getHours() + 4); // Padrão genérico
+            }
 
-    const loader = document.getElementById('loader');
-    if (loader) loader.style.display = 'flex';
+            const reportData = {
+                type: type,
+                subtype: subtype,
+                lat: userPos[0],
+                lng: userPos[1],
+                creator: window.currentAuthUser.uid,
+                createdAt: window.fb.serverTimestamp(),
+                expiresAt: expiryDate, // Firestore aceita objeto Date nativo
+                votes: [],
+                votes_exists: 0,
+                votes_not_exists: 0,
+                status: 'active'
+            };
 
-    try {
-        // Puxa as referências do objeto global fb que você já configurou
-        const { db, appId, doc, serverTimestamp, arrayUnion } = window.fb;
-        
-        // Importamos o writeBatch apenas uma vez ou usamos do window.fb se disponível
-        const { writeBatch } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-        
-        const uid = window.currentAuthUser.uid;
-        const batch = writeBatch(db);
-
-        // Lógica de Expiração - Requisito 5
-        const now = new Date();
-        let expiryDate = new Date(now);
-
-        const durations = {
-            'Polícia': 5,
-            'Faixa Bloqueada': 4,
-            'Acidente': 2,
-            'Default': 4
-        };
-
-        if (type === 'Radar') {
-            expiryDate.setFullYear(now.getFullYear() + 1);
-        } else {
-            const hours = durations[type] || durations['Default'];
-            expiryDate.setHours(now.getHours() + hours);
+            try {
+                const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
+                // ID único baseado em tempo e usuário
+                const docId = `${Date.now()}_${window.currentAuthUser.uid}`;
+                await window.fb.setDoc(window.fb.doc(reportsRef, docId), reportData);
+                
+                toggleReportPanel(false);
+                
+                if(type === 'Trânsito Lento') {
+                    animateSlowTrafficLine();
+                }
+            } catch (e) {
+                console.error("Erro ao salvar report", e);
+            }
         }
-
-        // Caminhos seguindo estritamente sua estrutura de artifacts
-        const docId = `rep_${Date.now()}_${uid.substring(0, 5)}`;
-        const reportRef = doc(db, 'artifacts', appId, 'public', 'data', 'reports', docId);
-        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', uid);
-
-        // Montagem do Batch - Dados limpos
-        batch.set(reportRef, {
-            type: type,
-            subtype: subtype,
-            lat: position[0],
-            lng: position[1],
-            creator: uid,
-            createdAt: serverTimestamp(),
-            expiresAt: expiryDate,
-            votes_exists: 0,
-            votes_not_exists: 0,
-            status: 'active'
-        });
-
-        // Registro de atividade do usuário para controle de spam
-        batch.set(userRef, {
-            recentReports: arrayUnion(serverTimestamp()),
-            lastActivity: serverTimestamp()
-        }, { merge: true });
-
-        await batch.commit();
-        
-        // Fecha o painel e limpa a UI
-        if (typeof toggleReportPanel === 'function') toggleReportPanel(false);
-        
-        // Opcional: Feedback silencioso via console para não interromper a navegação
-        console.log(`[CatsBlock] Reporte ${type} enviado.`);
-
-        if(type === 'Trânsito Lento' && typeof animateSlowTrafficLine === 'function') {
-            animateSlowTrafficLine();
-        }
-
-    } catch (e) {
-        console.error("Erro crítico no Firebase:", e);
-    } finally {
-        if (loader) loader.style.display = 'none';
-    }
-}
-
-// Exportação explícita para garantir que o HTML (onclick) enxergue a função
-window.submitReport = submitReport;
-        
-        
 
         function animateSlowTrafficLine() {
             if (!routingControl || !routingControl._selectedRoute) return;
