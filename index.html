@@ -436,6 +436,7 @@
             document.getElementById('loader').style.display = 'flex';
             try {
                 const result = await window.fb.signInWithPopup(window.fb.auth, window.fb.provider);
+                await window.fb.setDoc(window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'users', result.user.uid), { lastLogin: new Date(), email: result.user.email }, { merge: true });
                 currentAuthUser = result.user;
                 toggleLogin(false);
                 toggleReportPanel(true);
