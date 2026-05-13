@@ -564,14 +564,85 @@
             const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
             window.fb.onSnapshot(window.fb.query(reportsRef), (snapshot) => {
                 activeReportsLayer.clearLayers();
+                
+                // Primeiro coletamos e validamos todos os reports ativos
+                let validReports = [];
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    const id = docSnap.id;
+                    data.id = docSnap.id;
                     
-                    // Validação de expiração no front-end para limpeza imediata
+                    // Validação de expiração temporal
                     const expiry = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
                     if (expiry < new Date()) return;
+                    
+                    validReports.push(data);
+                });
 
+                // --- LÓGICA DE FILTRAGEM (IMPLEMENTAÇÃO REQUERIDA) ---
+                // 1. Resolver excesso de reports da mesma pessoa (Anti-spam por proximidade)
+                // Se > 3 reports do mesmo dono num raio de 100m, mantém apenas 1.
+                let filteredList = [];
+                let removedIds = new Set();
+
+                for(let i = 0; i < validReports.length; i++) {
+                    if (removedIds.has(validReports[i].id)) continue;
+                    
+                    let userReportsNearby = validReports.filter(r => 
+                        r.creator === validReports[i].creator && 
+                        !removedIds.has(r.id) &&
+                        getDistance([validReports[i].lat, validReports[i].lng], [r.lat, r.lng]) < 100
+                    );
+
+                    if (userReportsNearby.length > 3) {
+                        // Deixa apenas o mais recente (presumindo que o ID tem timestamp ou apenas o primeiro do loop)
+                        // Marcamos os outros para remoção mantendo apenas o atual
+                        userReportsNearby.forEach((r, idx) => {
+                            if(idx > 0) removedIds.add(r.id);
+                        });
+                    }
+                }
+
+                // Aplicamos a primeira filtragem
+                let afterUserFilter = validReports.filter(r => !removedIds.has(r.id));
+
+                // 2. Limite Global por Proximidade (Agrupamento inteligente)
+                // Se > 4 reports num raio de 60m, mostra no máximo 5 (únicos por dono)
+                let finalVisibleReports = [];
+                let processedInRadius = new Set();
+
+                for(let i = 0; i < afterUserFilter.length; i++) {
+                    const current = afterUserFilter[i];
+                    if (processedInRadius.has(current.id)) continue;
+
+                    // Encontra vizinhos num raio de 60 metros
+                    let neighbors = afterUserFilter.filter(r => 
+                        getDistance([current.lat, current.lng], [r.lat, r.lng]) < 60
+                    );
+
+                    if (neighbors.length > 4) {
+                        // Se tem muita coisa junta, limitamos a 5 reports de donos DIFERENTES
+                        let uniqueOwners = [];
+                        let ownersSeen = new Set();
+                        
+                        // Ordenar por data (opcional) ou apenas pegar os primeiros únicos
+                        neighbors.forEach(n => {
+                            if (!ownersSeen.has(n.creator) && uniqueOwners.length < 5) {
+                                ownersSeen.add(n.creator);
+                                uniqueOwners.push(n);
+                            }
+                            processedInRadius.add(n.id);
+                        });
+                        
+                        finalVisibleReports.push(...uniqueOwners);
+                    } else {
+                        // Caso contrário, adiciona normalmente
+                        finalVisibleReports.push(current);
+                        processedInRadius.add(current.id);
+                    }
+                }
+
+                // Renderização final dos marcadores filtrados
+                finalVisibleReports.forEach(data => {
                     const markerColor = getReportColor(data.type);
                     const markerIcon = L.divIcon({
                         className: 'custom-div-icon',
@@ -581,12 +652,13 @@
                     });
 
                     const marker = L.marker([data.lat, data.lng], { icon: markerIcon }).on('click', () => {
-                        showReportDetail(id, data);
+                        showReportDetail(data.id, data);
                     });
                     
                     marker.addTo(activeReportsLayer);
-                    lucide.createIcons();
                 });
+                
+                lucide.createIcons();
             }, (error) => console.error("Erro snapshot:", error));
         }
 
