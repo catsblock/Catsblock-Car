@@ -90,8 +90,8 @@
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
         .ui-container * { pointer-events: auto; }
         .top-ui { top: 20px; }
-        .bottom-ui { bottom: 25px; display: none; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); transform: translateY(100%); }
-        .bottom-ui.active { display: block; opacity: 1; transform: translateY(0); }
+        .bottom-ui { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100%); width: 92%; max-width: 420px; z-index: 2000; display: none; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .bottom-ui.active { display: block; opacity: 1; transform: translateX(-50%) translateY(0); }
 
         .glass-card {
             background: var(--surface); backdrop-filter: blur(25px);
@@ -123,19 +123,20 @@
         .radar-bus { background: #3b82f6; }
         
         .speed-badge {
-            position: absolute; left: 20px; bottom: 120px;
+            position: absolute; left: 20px; bottom: 25px;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
             padding: 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);
             text-align: center; min-width: 80px; z-index: 1000;
-            transition: bottom 0.5s ease;
+            transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .speed-nav-active { bottom: 320px; }
+        /* Classe de animação para subir o velocímetro e reporte */
+        .ui-lift-active { bottom: 320px !important; }
 
         #report-trigger-btn {
-            position: absolute; right: 20px; bottom: 120px;
+            position: absolute; right: 20px; bottom: 25px;
             background: var(--accent); color: white;
             padding: 15px; border-radius: 20px; z-index: 1000;
-            transition: bottom 0.5s ease;
+            transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow: 0 10px 20px rgba(168, 85, 247, 0.4);
         }
 
@@ -225,7 +226,7 @@
             width: 100%; max-width: 380px; border: 1px solid rgba(255,255,255,0.1);
         }
 
-        /* NOVOS ESTILOS REQUISITADOS */
+        /* FRAME DE ALERTA DE PROXIMIDADE CORRIGIDO PARA MOBILE (CENTRALIZADO) */
         #proximity-alert-frame {
             display: none; position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100%);
             width: 92%; max-width: 420px; z-index: 3000; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -303,7 +304,7 @@
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
     </div>
 
-    <!-- FRAME DE ALERTA DE PROXIMIDADE REQUISITADO -->
+    <!-- FRAME DE ALERTA DE PROXIMIDADE CORRIGIDO -->
     <div id="proximity-alert-frame">
         <div class="black-minimal-card">
             <div class="flex items-center gap-5">
@@ -406,7 +407,7 @@
         <div id="map"></div>
     </div>
 
-    <div class="ui-container bottom-ui" id="trip-card">
+    <div class="bottom-ui" id="trip-card">
         <div class="glass-card relative">
             <div class="absolute top-4 right-4 flex flex-col gap-2 items-center">
                 <button onclick="clearSelection()" class="text-zinc-500 hover:text-white p-2" title="Fechar">
@@ -813,21 +814,30 @@
             }
         }
 
+        /**
+         * Gerencia a visualização do alerta de proximidade e as animações da interface (KM/H e Reporte)
+         */
         function updateProximityAlertUI(report, dist) {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
             const textEl = document.getElementById('prox-alert-text');
             const iconContainer = document.getElementById('prox-icon-container');
             const voteArea = document.getElementById('prox-vote-area');
+            const speedUI = document.getElementById('speed-ui');
+            const reportBtn = document.getElementById('report-trigger-btn');
 
             // Ativação inicial do alerta (800m)
             if (activeAlertaReportId !== report.id) {
                 activeAlertaReportId = report.id;
                 alertaPassou = false;
                 
-                // Animação de troca de frames (Requisito 2)
+                // Animação de troca de frames
                 tripCard.classList.remove('active');
                 frame.classList.add('active');
+                
+                // REQUISITO: Subir o velocímetro e reporte com animação
+                speedUI.classList.add('ui-lift-active');
+                reportBtn.classList.add('ui-lift-active');
                 
                 // Configuração visual do ícone
                 iconContainer.style.backgroundColor = getReportColor(report.type);
@@ -835,29 +845,22 @@
                 lucide.createIcons();
             }
 
-            // Lógica de distanciamento e texto (Requisito 3 e 6)
-            // Se a distância começar a aumentar significativamente após chegar muito perto, consideramos que passou
-            // Ou simplesmente checamos se dist < 10m (passou pelo ponto)
             if (dist < 25) alertaPassou = true;
 
             if (!alertaPassou) {
-                // Texto com distância dinâmica (Requisito 3 e 4)
                 let label = report.type === 'Radar' ? `Radar de ${report.subtype || 'Velocidade'}` : report.type;
                 textEl.innerText = `${label} em ${Math.round(dist)} metros`;
                 
-                // Requisito 5: Mostrar botões em 150m se não tiver votado
                 if (dist <= 150 && !jaVotouNesse.has(report.id)) {
                     voteArea.classList.remove('hidden');
                 } else {
                     voteArea.classList.add('hidden');
                 }
             } else {
-                // Requisito 6: Remove o trecho "em X metros" após passar
                 let label = report.type === 'Radar' ? `Radar de ${report.subtype || 'Velocidade'}` : report.type;
                 textEl.innerText = label;
                 voteArea.classList.add('hidden');
 
-                // Requisito 7: Inicia contagem regressiva de 5s para fechar
                 if (!alertaFimTimeout) {
                     alertaFimTimeout = setTimeout(() => {
                         closeProximityAlert();
@@ -866,9 +869,14 @@
             }
         }
 
+        /**
+         * Fecha o alerta de proximidade e restaura a interface original (KM/H desce)
+         */
         function closeProximityAlert() {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
+            const speedUI = document.getElementById('speed-ui');
+            const reportBtn = document.getElementById('report-trigger-btn');
             
             frame.classList.remove('active');
             activeAlertaReportId = null;
@@ -876,33 +884,34 @@
             if(alertaFimTimeout) clearTimeout(alertaFimTimeout);
             alertaFimTimeout = null;
 
-            // Retorna o frame original (Requisito 7)
+            // Retorna o frame original
             if (isNavigating) {
                 tripCard.classList.add('active');
+                // Mantém KM/H em cima enquanto o trip card está ativo
+                speedUI.classList.add('ui-lift-active');
+                reportBtn.classList.add('ui-lift-active');
+            } else {
+                // REQUISITO: Descer velocímetro e reporte se a viagem acabou
+                speedUI.classList.remove('ui-lift-active');
+                reportBtn.classList.remove('ui-lift-active');
             }
         }
 
         async function voteViaAlerta(isPositive) {
-            // Requisito 7: Fecha imediatamente após clicar
             lastSelectedReportId = activeAlertaReportId;
             await voteReport(isPositive);
             closeProximityAlert();
         }
 
         function checkNearbyReports(coords) {
-            // Lógica legada mantida para não alterar estrutura original
             activeReportsLayer.eachLayer(layer => {
                 const reportLatLng = layer.getLatLng();
                 const dist = getDistance(coords, [reportLatLng.lat, reportLatLng.lng]);
                 if (dist < 300) {
-                   if(document.getElementById('alert-modal').style.display !== 'flex') {
-                       // O Requisito 1 pede independência, então mantemos os avisos originais aqui
-                       // Mas o novo sistema de frame preto cuida da visualização principal de 800m
-                   }
+                   // Reservado para futuras implementações de áudio ou feedback secundário
                 }
             });
 
-            // Chama a nova lógica implementada de 800 metros
             handleProximityLogic(coords);
         }
 
@@ -1044,7 +1053,6 @@
                     lastApiPos = coords;
                 }
 
-                // Chamar lógica de reportes e proximidade
                 checkNearbyReports(coords);
                 
                 animate(coords);
@@ -1153,7 +1161,13 @@
             if (destMarker) map.removeLayer(destMarker);
             destinationLatLng = latlng;
             destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
+            
+            // Ativa o trip card
             document.getElementById('trip-card').classList.add('active');
+            // REQUISITO: Subir velocímetro e reporte ao mostrar o frame de viagem (caminho final)
+            document.getElementById('speed-ui').classList.add('ui-lift-active');
+            document.getElementById('report-trigger-btn').classList.add('ui-lift-active');
+            
             if (routingControl) map.removeControl(routingControl);
             
             const profiles = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' };
@@ -1186,7 +1200,6 @@
                 else if (travelMode === 'bike') { el.innerText = "Calorias Est."; ev.innerText = `${Math.round(dKm * 32)} kcal`; }
                 else { el.innerText = "Passos Est."; ev.innerText = `${Math.round(dKm * 1400)}`; }
                 
-                // Requisito 8: Renderizar reports assim que a rota for traçada (antes de iniciar)
                 renderFilteredReports();
             }).addTo(map);
         }
@@ -1213,10 +1226,10 @@
             document.getElementById('action-area').innerHTML = start ? 
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
-            document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
-            document.getElementById('report-trigger-btn').style.bottom = start ? '320px' : '120px';
             
-            // Requisito 8: Filtra ao começar viagem
+            // O velocímetro e reporte já subiram ao selecionar o destino (setDest)
+            // Se parar a navegação (start === false), precisamos restaurar tudo via clearSelection
+            
             renderFilteredReports();
 
             if(start) {
@@ -1243,9 +1256,14 @@
             if (isNavigating) return;
             if (routingControl) map.removeControl(routingControl);
             if (destMarker) map.removeLayer(destMarker);
+            
+            // Esconde o trip card
             document.getElementById('trip-card').classList.remove('active');
+            // REQUISITO: Velocímetro e Reporte descem ao desaparecer o frame de viagem
+            document.getElementById('speed-ui').classList.remove('ui-lift-active');
+            document.getElementById('report-trigger-btn').classList.remove('ui-lift-active');
+            
             routingControl = null; destinationLatLng = null;
-            // Requisito 8: Desaparecem reports filtrados ao fechar viagem
             activeReportsLayer.clearLayers();
             window.history.replaceState({}, '', '/');
         }
