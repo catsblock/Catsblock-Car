@@ -512,6 +512,8 @@
                     expiryDate.setHours(now.getHours() + 2); break;
                 case 'Radar': 
                     expiryDate.setFullYear(now.getFullYear() + 1); break;
+                case 'Obras': 
+                    expiryDate.setMonth(now.getMonth() + 4); break;
                 default: 
                     expiryDate.setHours(now.getHours() + 4); // Padrão genérico
             }
