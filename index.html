@@ -617,6 +617,9 @@
         let reportCache = []; // Armazena os dados do Firebase localmente
         let lastReportUpdate = 0; // Timestamp da última atualização visual dos ícones
 
+        /**
+         * Lógica de escuta de reportes do Firebase
+         */
         function listenToReports() {
             const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
             
@@ -639,33 +642,45 @@
             }, (error) => console.error("Erro snapshot:", error));
 
             // --- IMPLEMENTAÇÃO REQUERIDA: LOOP DE 10S ---
+            // Este intervalo garante que a visualização seja refrescada de acordo com o movimento do usuário a cada 10 segundos.
             setInterval(() => {
                 renderFilteredReports();
             }, 10000);
         }
 
         /**
-         * Renderização baseada nos requisitos de distância e movimento
+         * Renderização baseada nos requisitos de distância, movimento e estado da viagem.
+         * IMPLEMENTAÇÃO REQUERIDA 1: Filtro de 2km, 4km/h e visibilidade em repouso/caminho final.
          */
         function renderFilteredReports() {
             if (!userPos) return;
 
-            // No caminho final ou pré-viagem, mostramos independente da velocidade
-            if (isNavigating && currentSpeed < 4) {
+            // Determina se devemos mostrar reportes baseado na regra de ouro de movimento e estado.
+            // Regra: Mostrar se estiver se movendo >= 4km/h OU se estiver vendo o caminho final (sem navegar ativamente).
+            const isMovingEnough = currentSpeed >= 4;
+            const isViewingPreview = !!destinationLatLng && !isNavigating; // "Mostrando caminho final antes de começar a viagem"
+            
+            // Se o usuário estiver em navegação mas parado (< 4km/h), limpamos para não poluir, 
+            // a menos que seja o preview do caminho final solicitado.
+            if (isNavigating && !isMovingEnough) {
+                activeReportsLayer.clearLayers();
                 return; 
             }
 
             activeReportsLayer.clearLayers();
 
-            // Filtragem por distância (1.5km)
+            // Filtragem dos reportes do cache conforme os critérios espaciais e de estado
             const visibleReports = reportCache.filter(report => {
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
-                let isWithinRange = distToUser <= 1500;
+                
+                // Critério 1: Reportes a 2km da localização (Requisito: "reportes são só chamados a 2km")
+                let isWithinRange = distToUser <= 2000;
 
-                if (destinationLatLng) {
-                    const distToDest = getDistance([destinationLatLng.lat, destinationLatLng.lng], [report.lat, report.lng]);
-                    if (distToDest <= 1500) isWithinRange = true;
+                // Critério 2: No "Caminho Final", aparecem a qualquer distância (Requisito: "aparecem a qualquer distância se está no caminho final antes de começar")
+                if (isViewingPreview) {
+                    isWithinRange = true; 
                 }
+
                 return isWithinRange;
             });
 
@@ -1295,7 +1310,6 @@
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
             
             // O velocímetro e reporte já subiram ao selecionar o destino (setDest)
-            // Se parar a navegação (start === false), precisamos restaurar tudo via clearSelection
             
             renderFilteredReports();
 
