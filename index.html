@@ -505,13 +505,15 @@
             // Requisito 5: Tempos de duração específicos
             switch(type) {
                 case 'Polícia': 
-                    expiryDate.setHours(now.getHours() + 5); break;
+                    expiryDate.setHours(now.getHours() + 4); break;
                 case 'Faixa Bloqueada': 
                     expiryDate.setMonth(now.getMonth() + 4); break;
                 case 'Acidente': 
                     expiryDate.setHours(now.getHours() + 2); break;
                 case 'Radar': 
                     expiryDate.setFullYear(now.getFullYear() + 1); break;
+                case 'Obra'
+                    expiryDate.setMonth(now.getMonth() + 4); break;
                 default: 
                     expiryDate.setHours(now.getHours() + 4); // Padrão genérico
             }
