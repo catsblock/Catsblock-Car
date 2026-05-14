@@ -507,13 +507,13 @@
                 case 'Polícia': 
                     expiryDate.setHours(now.getHours() + 4); break;
                 case 'Faixa Bloqueada': 
-                    expiryDate.setMonth(now.getMonth() + 4); break;
+                    expiryDate.setMonth(now.getMonth() + 6); break;
                 case 'Acidente': 
                     expiryDate.setHours(now.getHours() + 2); break;
                 case 'Radar': 
                     expiryDate.setFullYear(now.getFullYear() + 1); break;
                 case 'Obras': 
-                    expiryDate.setMonth(now.getMonth() + 4); break;
+                    expiryDate.setMonth(now.getMonth() + 6); break;
                 default: 
                     expiryDate.setHours(now.getHours() + 4); // Padrão genérico
             }
@@ -947,19 +947,44 @@
                 const res = await fetch(url);
                 const data = await res.json();
                 alertLayer.clearLayers();
+
+                // Ícones customizados conforme solicitado
+                const iconRadarVelocidade = L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_velocidade.png',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                const iconRadarTransito = L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_trânsito.png',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
                 data.features.forEach(feature => {
                     const props = feature.properties;
                     const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+                    
                     if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
-                        let typeKey = props.osm_key === 'traffic_light' ? 'traffic_light' : 'fixed';
+                        // Determinação do ícone baseado no tipo de radar
+                        const isTrafficRadar = props.osm_key === 'traffic_light';
+                        const radarIcon = isTrafficRadar ? iconRadarTransito : iconRadarVelocidade;
+                        
+                        // Busca dados informativos (title, desc, lesson) do objeto RADAR_DATA existente
+                        let typeKey = isTrafficRadar ? 'traffic_light' : 'fixed';
                         const rInfo = RADAR_DATA[typeKey];
-                        L.marker(coords, { icon: L.divIcon({ className: `radar-dot ${rInfo.class}` }) }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
+
+                        L.marker(coords, { icon: radarIcon })
+                            .on('click', () => showRadarModal(rInfo))
+                            .addTo(alertLayer);
                     } else if (props.osm_value === 'construction') {
                         L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 })
                          .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
-            } catch(e) {}
+            } catch(e) {
+                console.error("Erro ao buscar alertas da API externa", e);
+            }
         }
 
         function showRadarModal(info) {
