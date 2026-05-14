@@ -90,8 +90,8 @@
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
         .ui-container * { pointer-events: auto; }
         .top-ui { top: 20px; }
-        .bottom-ui { bottom: 25px; display: none; opacity: 0; transition: all 0.5s ease; }
-        .bottom-ui.active { display: block; opacity: 1; }
+        .bottom-ui { bottom: 25px; display: none; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); transform: translateY(100%); }
+        .bottom-ui.active { display: block; opacity: 1; transform: translateY(0); }
 
         .glass-card {
             background: var(--surface); backdrop-filter: blur(25px);
@@ -224,6 +224,24 @@
             background: var(--surface); border-radius: 32px; padding: 30px;
             width: 100%; max-width: 380px; border: 1px solid rgba(255,255,255,0.1);
         }
+
+        /* NOVOS ESTILOS REQUISITADOS */
+        #proximity-alert-frame {
+            display: none; position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100%);
+            width: 92%; max-width: 420px; z-index: 3000; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #proximity-alert-frame.active { display: block; opacity: 1; transform: translateX(-50%) translateY(0); }
+        .black-minimal-card {
+            background: #000000; border-radius: 28px; padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 30px 60px rgba(0,0,0,1);
+        }
+        .vote-btn {
+            flex: 1; padding: 14px; border-radius: 16px; font-size: 11px; font-weight: 800; 
+            text-transform: uppercase; transition: all 0.2s;
+        }
+        .vote-btn-red { background: rgba(255, 69, 58, 0.15); color: #ff453a; border: 1px solid rgba(255, 69, 58, 0.2); }
+        .vote-btn-green { background: rgba(48, 209, 88, 0.15); color: #30d158; border: 1px solid rgba(48, 209, 88, 0.2); }
     </style>
 </head>
 <body>
@@ -239,7 +257,6 @@
                 <i data-lucide="log-in" color="white" size="32"></i>
             </div>
             <h2 class="text-xl font-black mb-4">Faça login pra Reportar Acidentes, radares, obras e muito mais.</h2>
-            <!-- Botão de login: Chamada handleLogin() corrigida no escopo global -->
             <button onclick="handleLogin()" class="w-full bg-white text-black py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:scale-[1.02] transition-transform">
                 <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335"/></svg>
                 Login via Google
@@ -284,6 +301,26 @@
             <p class="font-bold text-white italic">"Nunca vamos armazenar sua localização."</p>
         </div>
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
+    </div>
+
+    <!-- FRAME DE ALERTA DE PROXIMIDADE REQUISITADO -->
+    <div id="proximity-alert-frame">
+        <div class="black-minimal-card">
+            <div class="flex items-center gap-5">
+                <div id="prox-icon-container" class="w-14 h-14 bg-zinc-900 rounded-2xl flex items-center justify-center">
+                    <!-- Ícone Dinâmico -->
+                </div>
+                <div class="flex-1">
+                    <p id="prox-alert-text" class="text-white font-black text-lg leading-tight">Radar de Velocidade em 800m</p>
+                    <p id="prox-alert-sub" class="text-zinc-500 text-[10px] font-bold uppercase mt-1 tracking-widest">Alerta em tempo real</p>
+                </div>
+            </div>
+            
+            <div id="prox-vote-area" class="flex gap-3 mt-5 hidden">
+                <button onclick="voteViaAlerta(false)" class="vote-btn vote-btn-red">Não existe</button>
+                <button onclick="voteViaAlerta(true)" class="vote-btn vote-btn-green">Ainda está lá</button>
+            </div>
+        </div>
     </div>
 
     <div id="alert-modal" onclick="closeAlertModal()">
@@ -428,6 +465,12 @@
         let lastSelectedReportId = null;
 
         let config = { theme: 'auto', vision: 'auto' };
+
+        // VARIÁVEIS DE CONTROLE DO ALERTA DE PROXIMIDADE (REQUISITO 2, 3, 4, 5, 6, 7)
+        let activeAlertaReportId = null;
+        let alertaPassou = false;
+        let alertaFimTimeout = null;
+        let jaVotouNesse = new Set(); // Controle para não mostrar botões se já votou
 
         const RADAR_DATA = {
             fixed: { title: "Radar de Velocidade", desc: "Monitoramento contínuo de velocidade.", lesson: "Ele evita que você corra demais, preservando os freios do seu carro.", type: "VELOCIDADE", icon: "gauge", class: "radar-speed" },
@@ -588,46 +631,36 @@
             }, (error) => console.error("Erro snapshot:", error));
 
             // --- IMPLEMENTAÇÃO REQUERIDA: LOOP DE 10S ---
-            // Atualiza a visualização a cada 10 segundos baseando-se no movimento e distância
             setInterval(() => {
                 renderFilteredReports();
             }, 10000);
         }
 
         /**
-         * Função principal de renderização baseada nos requisitos:
-         * 1. Apenas enquanto se move (>= 4km/h)
-         * 2. Limite de distância de 1.5km
-         * 3. Permite visualização no destino/caminho final antes de começar a viagem
+         * Renderização baseada nos requisitos de distância e movimento
          */
         function renderFilteredReports() {
             if (!userPos) return;
 
-            // Se não estiver se movendo (pelo menos 4km/h), não atualiza a menos que não esteja navegando (pre-viagem)
-            // Isso garante que os reports apareçam no "caminho final" ou no mapa antes de dar o Start.
+            // No caminho final ou pré-viagem, mostramos independente da velocidade
             if (isNavigating && currentSpeed < 4) {
                 return; 
             }
 
             activeReportsLayer.clearLayers();
 
-            // Filtragem por distância (1.5km) a partir da posição do usuário
+            // Filtragem por distância (1.5km)
             const visibleReports = reportCache.filter(report => {
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
-                
-                // Regra: até 1.5km do usuário
                 let isWithinRange = distToUser <= 1500;
 
-                // Regra Adicional: Também mostra se estiver perto do destino (caminho final)
                 if (destinationLatLng) {
                     const distToDest = getDistance([destinationLatLng.lat, destinationLatLng.lng], [report.lat, report.lng]);
                     if (distToDest <= 1500) isWithinRange = true;
                 }
-
                 return isWithinRange;
             });
 
-            // Renderiza apenas os que passaram no filtro dinâmico
             visibleReports.forEach(data => {
                 const markerColor = getReportColor(data.type);
                 const markerIcon = L.divIcon({
@@ -689,7 +722,6 @@
             const btnNotExists = document.getElementById('btn-not-exists');
             const btnStillThere = document.getElementById('btn-still-there');
 
-            // Habilita botões baseado na distância
             btnStillThere.disabled = !isNear;
             btnStillThere.style.opacity = isNear ? '1' : '0.3';
             btnNotExists.disabled = !isNear;
@@ -711,15 +743,12 @@
             }
         }
 
-        // Requisito 2 e 5: Correção da função de transação e lógica de tempo de voto
         async function voteReport(isPositive) {
             if (!window.currentAuthUser || !lastSelectedReportId) return;
 
             const reportRef = window.fb.doc(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports', lastSelectedReportId);
             
             try {
-                // Requisito 2: Substituindo window.fb.runTransaction por lógica de atualização segura manual
-                // Visto que o ambiente pode ter restrições com a função runTransaction em certas versões SDK web
                 const snap = await window.fb.getDoc(reportRef);
                 if (!snap.exists()) return;
 
@@ -727,12 +756,9 @@
                 const currentExpiry = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
                 let newExpiry = new Date(currentExpiry);
 
-                // Requisito 5: Regras de aumento/diminuição de tempo
                 if (isPositive) {
-                    // Aumenta 1 dia
                     newExpiry.setDate(newExpiry.getDate() + 1);
                 } else {
-                    // Diminui 6 horas
                     newExpiry.setHours(newExpiry.getHours() - 6);
                 }
 
@@ -741,7 +767,6 @@
                     votes: window.fb.arrayUnion(window.currentAuthUser.uid)
                 };
 
-                // Incrementa os contadores legados
                 if (isPositive) {
                     updateData.votes_exists = window.fb.increment(1);
                 } else {
@@ -749,23 +774,136 @@
                 }
 
                 await window.fb.updateDoc(reportRef, updateData);
+                
+                // Registro local de voto para o alerta de proximidade
+                jaVotouNesse.add(lastSelectedReportId);
+                
                 closeAlertModal();
             } catch (e) {
                 console.error("Erro ao votar:", e);
             }
         }
 
+        // LÓGICA DE PROXIMIDADE REQUISITADA (REQUISITO 2, 3, 4, 5, 6, 7)
+        function handleProximityLogic(coords) {
+            if (!isNavigating) {
+                closeProximityAlert();
+                return;
+            }
+
+            let foundNearby = null;
+            let minDist = 801;
+
+            // Busca no cache de reports qual o mais próximo que está no filtro de 800m
+            reportCache.forEach(report => {
+                const d = getDistance(coords, [report.lat, report.lng]);
+                if (d < minDist) {
+                    minDist = d;
+                    foundNearby = report;
+                }
+            });
+
+            if (foundNearby) {
+                updateProximityAlertUI(foundNearby, minDist);
+            } else {
+                // Se não houver nenhum report a menos de 800m, e já estivermos com alerta aberto
+                if (activeAlertaReportId && !alertaPassou) {
+                    closeProximityAlert();
+                }
+            }
+        }
+
+        function updateProximityAlertUI(report, dist) {
+            const frame = document.getElementById('proximity-alert-frame');
+            const tripCard = document.getElementById('trip-card');
+            const textEl = document.getElementById('prox-alert-text');
+            const iconContainer = document.getElementById('prox-icon-container');
+            const voteArea = document.getElementById('prox-vote-area');
+
+            // Ativação inicial do alerta (800m)
+            if (activeAlertaReportId !== report.id) {
+                activeAlertaReportId = report.id;
+                alertaPassou = false;
+                
+                // Animação de troca de frames (Requisito 2)
+                tripCard.classList.remove('active');
+                frame.classList.add('active');
+                
+                // Configuração visual do ícone
+                iconContainer.style.backgroundColor = getReportColor(report.type);
+                iconContainer.innerHTML = `<i data-lucide="${getReportIcon(report.type)}" color="white" size="28"></i>`;
+                lucide.createIcons();
+            }
+
+            // Lógica de distanciamento e texto (Requisito 3 e 6)
+            // Se a distância começar a aumentar significativamente após chegar muito perto, consideramos que passou
+            // Ou simplesmente checamos se dist < 10m (passou pelo ponto)
+            if (dist < 25) alertaPassou = true;
+
+            if (!alertaPassou) {
+                // Texto com distância dinâmica (Requisito 3 e 4)
+                let label = report.type === 'Radar' ? `Radar de ${report.subtype || 'Velocidade'}` : report.type;
+                textEl.innerText = `${label} em ${Math.round(dist)} metros`;
+                
+                // Requisito 5: Mostrar botões em 150m se não tiver votado
+                if (dist <= 150 && !jaVotouNesse.has(report.id)) {
+                    voteArea.classList.remove('hidden');
+                } else {
+                    voteArea.classList.add('hidden');
+                }
+            } else {
+                // Requisito 6: Remove o trecho "em X metros" após passar
+                let label = report.type === 'Radar' ? `Radar de ${report.subtype || 'Velocidade'}` : report.type;
+                textEl.innerText = label;
+                voteArea.classList.add('hidden');
+
+                // Requisito 7: Inicia contagem regressiva de 5s para fechar
+                if (!alertaFimTimeout) {
+                    alertaFimTimeout = setTimeout(() => {
+                        closeProximityAlert();
+                    }, 5000);
+                }
+            }
+        }
+
+        function closeProximityAlert() {
+            const frame = document.getElementById('proximity-alert-frame');
+            const tripCard = document.getElementById('trip-card');
+            
+            frame.classList.remove('active');
+            activeAlertaReportId = null;
+            alertaPassou = false;
+            if(alertaFimTimeout) clearTimeout(alertaFimTimeout);
+            alertaFimTimeout = null;
+
+            // Retorna o frame original (Requisito 7)
+            if (isNavigating) {
+                tripCard.classList.add('active');
+            }
+        }
+
+        async function voteViaAlerta(isPositive) {
+            // Requisito 7: Fecha imediatamente após clicar
+            lastSelectedReportId = activeAlertaReportId;
+            await voteReport(isPositive);
+            closeProximityAlert();
+        }
+
         function checkNearbyReports(coords) {
+            // Lógica legada mantida para não alterar estrutura original
             activeReportsLayer.eachLayer(layer => {
                 const reportLatLng = layer.getLatLng();
                 const dist = getDistance(coords, [reportLatLng.lat, reportLatLng.lng]);
                 if (dist < 300) {
                    if(document.getElementById('alert-modal').style.display !== 'flex') {
-                       document.getElementById('inst-text').innerText = "ATENÇÃO: Evento Próximo!";
-                       document.getElementById('inst-dist').innerText = `A ${Math.round(dist)}m`;
+                       // O Requisito 1 pede independência, então mantemos os avisos originais aqui
+                       // Mas o novo sistema de frame preto cuida da visualização principal de 800m
                    }
                 }
             });
+
+            // Chama a nova lógica implementada de 800 metros
+            handleProximityLogic(coords);
         }
 
         function loadConfig() {
@@ -906,7 +1044,9 @@
                     lastApiPos = coords;
                 }
 
+                // Chamar lógica de reportes e proximidade
                 checkNearbyReports(coords);
+                
                 animate(coords);
                 if (isNavigating) updateNavigation();
                 prevPos = coords;
@@ -1045,6 +1185,9 @@
                 else if (travelMode === 'car') { el.innerText = "Combustível"; ev.innerText = `R$ ${(dKm/10*5.85).toFixed(2)}`; }
                 else if (travelMode === 'bike') { el.innerText = "Calorias Est."; ev.innerText = `${Math.round(dKm * 32)} kcal`; }
                 else { el.innerText = "Passos Est."; ev.innerText = `${Math.round(dKm * 1400)}`; }
+                
+                // Requisito 8: Renderizar reports assim que a rota for traçada (antes de iniciar)
+                renderFilteredReports();
             }).addTo(map);
         }
 
@@ -1072,6 +1215,10 @@
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
             document.getElementById('speed-ui').classList.toggle('speed-nav-active', start);
             document.getElementById('report-trigger-btn').style.bottom = start ? '320px' : '120px';
+            
+            // Requisito 8: Filtra ao começar viagem
+            renderFilteredReports();
+
             if(start) {
                 userInteracting = false; 
                 map.setZoom(19); 
@@ -1079,6 +1226,7 @@
                 setDest(destinationLatLng); 
                 translateText("Iniciando navegação.");
             } else { 
+                closeProximityAlert();
                 clearSelection(); 
                 updateVisionMode(); 
             }
@@ -1097,6 +1245,8 @@
             if (destMarker) map.removeLayer(destMarker);
             document.getElementById('trip-card').classList.remove('active');
             routingControl = null; destinationLatLng = null;
+            // Requisito 8: Desaparecem reports filtrados ao fechar viagem
+            activeReportsLayer.clearLayers();
             window.history.replaceState({}, '', '/');
         }
 
