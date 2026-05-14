@@ -435,6 +435,22 @@
             bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
 
+        // --- DEFINIÇÃO DOS ÍCONES PERSONALIZADOS ---
+        // Implementação dos URLs de radares fornecidos no mapa
+        const ICON_RADAR_SPEED = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_velocidade.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16]
+        });
+
+        const ICON_RADAR_TRAFFIC = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_tr%C3%A2nsito.png', // Corrigido encoding para 'trânsito'
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16]
+        });
+
         // Requisito 4: Login só aparece se necessário
         function initiateReport() {
             if (window.currentAuthUser) {
@@ -505,15 +521,15 @@
             // Requisito 5: Tempos de duração específicos
             switch(type) {
                 case 'Polícia': 
-                    expiryDate.setHours(now.getHours() + 4); break;
+                    expiryDate.setHours(now.getHours() + 5); break;
                 case 'Faixa Bloqueada': 
+                    expiryDate.setMonth(now.getMonth() + 6); break;
+                case 'Obras': 
                     expiryDate.setMonth(now.getMonth() + 6); break;
                 case 'Acidente': 
                     expiryDate.setHours(now.getHours() + 2); break;
                 case 'Radar': 
                     expiryDate.setFullYear(now.getFullYear() + 1); break;
-                case 'Obras': 
-                    expiryDate.setMonth(now.getMonth() + 6); break;
                 default: 
                     expiryDate.setHours(now.getHours() + 4); // Padrão genérico
             }
@@ -645,15 +661,26 @@
 
                 // Renderização final dos marcadores filtrados
                 finalVisibleReports.forEach(data => {
-                    const markerColor = getReportColor(data.type);
-                    const markerIcon = L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14"></i></div>`,
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15]
-                    });
+                    let marker;
 
-                    const marker = L.marker([data.lat, data.lng], { icon: markerIcon }).on('click', () => {
+                    // --- CUSTOMIZAÇÃO DE ÍCONES DE RADAR REPORTADOS (REQUISITO SOLICITADO) ---
+                    // Se o tipo for Radar, usamos os ícones personalizados de imagem
+                    if (data.type === 'Radar') {
+                        const radarIcon = data.subtype === 'Trânsito' ? ICON_RADAR_TRAFFIC : ICON_RADAR_SPEED;
+                        marker = L.marker([data.lat, data.lng], { icon: radarIcon });
+                    } else {
+                        // Para outros tipos, mantém o estilo original de círculo divIcon
+                        const markerColor = getReportColor(data.type);
+                        const markerIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14"></i></div>`,
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        });
+                        marker = L.marker([data.lat, data.lng], { icon: markerIcon });
+                    }
+
+                    marker.on('click', () => {
                         showReportDetail(data.id, data);
                     });
                     
@@ -947,44 +974,28 @@
                 const res = await fetch(url);
                 const data = await res.json();
                 alertLayer.clearLayers();
-
-                // Ícones customizados conforme solicitado
-                const iconRadarVelocidade = L.icon({
-                    iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_velocidade.png',
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 16]
-                });
-
-                const iconRadarTransito = L.icon({
-                    iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_trânsito.png',
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 16]
-                });
-
                 data.features.forEach(feature => {
                     const props = feature.properties;
                     const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
                     
+                    // --- CUSTOMIZAÇÃO DE ÍCONES DE RADAR DA API (REQUISITO SOLICITADO) ---
                     if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
-                        // Determinação do ícone baseado no tipo de radar
-                        const isTrafficRadar = props.osm_key === 'traffic_light';
-                        const radarIcon = isTrafficRadar ? iconRadarTransito : iconRadarVelocidade;
-                        
-                        // Busca dados informativos (title, desc, lesson) do objeto RADAR_DATA existente
-                        let typeKey = isTrafficRadar ? 'traffic_light' : 'fixed';
+                        let typeKey = props.osm_key === 'traffic_light' ? 'traffic_light' : 'fixed';
                         const rInfo = RADAR_DATA[typeKey];
-
+                        
+                        // Seleciona o ícone customizado baseado no tipo da API
+                        const radarIcon = typeKey === 'traffic_light' ? ICON_RADAR_TRAFFIC : ICON_RADAR_SPEED;
+                        
                         L.marker(coords, { icon: radarIcon })
-                            .on('click', () => showRadarModal(rInfo))
-                            .addTo(alertLayer);
+                         .on('click', () => showRadarModal(rInfo))
+                         .addTo(alertLayer);
                     } else if (props.osm_value === 'construction') {
                         L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 })
-                         .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
+                         .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction'))
+                         .addTo(alertLayer);
                     }
                 });
-            } catch(e) {
-                console.error("Erro ao buscar alertas da API externa", e);
-            }
+            } catch(e) {}
         }
 
         function showRadarModal(info) {
