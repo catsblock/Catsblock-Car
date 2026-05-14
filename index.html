@@ -435,22 +435,6 @@
             bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
 
-        // --- DEFINIÇÃO DOS ÍCONES PERSONALIZADOS ---
-        // Implementação dos URLs de radares fornecidos no mapa
-        const ICON_RADAR_SPEED = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_velocidade.png',
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popupAnchor: [0, -16]
-        });
-
-        const ICON_RADAR_TRAFFIC = L.icon({
-            iconUrl: 'https://raw.githubusercontent.com/catsblock/Catsblock-Car/main/Radar_tr%C3%A2nsito.png', // Corrigido encoding para 'trânsito'
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popupAnchor: [0, -16]
-        });
-
         // Requisito 4: Login só aparece se necessário
         function initiateReport() {
             if (window.currentAuthUser) {
@@ -521,11 +505,11 @@
             // Requisito 5: Tempos de duração específicos
             switch(type) {
                 case 'Polícia': 
-                    expiryDate.setHours(now.getHours() + 5); break;
+                    expiryDate.setHours(now.getHours() + 4); break;
                 case 'Faixa Bloqueada': 
-                    expiryDate.setMonth(now.getMonth() + 6); break;
-                case 'Obras': 
-                    expiryDate.setMonth(now.getMonth() + 6); break;
+                    expiryDate.setMonth(now.getMonth() + 4); break;
+                case 'Obras':
+                    expiryDate.setMonth(now.getMonth() + 4); break;
                 case 'Acidente': 
                     expiryDate.setHours(now.getHours() + 2); break;
                 case 'Radar': 
@@ -578,117 +562,89 @@
             setTimeout(() => { if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; } }, 60000);
         }
 
+        // --- VARIÁVEIS DE CONTROLE PARA REQUISITO DE MOVIMENTO E DISTÂNCIA ---
+        let reportCache = []; // Armazena os dados do Firebase localmente
+        let lastReportUpdate = 0; // Timestamp da última atualização visual dos ícones
+
         function listenToReports() {
             const reportsRef = window.fb.collection(window.fb.db, 'artifacts', window.fb.appId, 'public', 'data', 'reports');
+            
+            // Ouvinte em tempo real do Firebase (Mantém o cache atualizado)
             window.fb.onSnapshot(window.fb.query(reportsRef), (snapshot) => {
-                activeReportsLayer.clearLayers();
-                
-                // Primeiro coletamos e validamos todos os reports ativos
-                let validReports = [];
+                reportCache = [];
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
                     data.id = docSnap.id;
                     
-                    // Validação de expiração temporal
+                    // Validação de expiração temporal básica
                     const expiry = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
-                    if (expiry < new Date()) return;
-                    
-                    validReports.push(data);
-                });
-
-                // --- LÓGICA DE FILTRAGEM (IMPLEMENTAÇÃO REQUERIDA) ---
-                // 1. Resolver excesso de reports da mesma pessoa (Anti-spam por proximidade)
-                // Se > 3 reports do mesmo dono num raio de 100m, mantém apenas 1.
-                let filteredList = [];
-                let removedIds = new Set();
-
-                for(let i = 0; i < validReports.length; i++) {
-                    if (removedIds.has(validReports[i].id)) continue;
-                    
-                    let userReportsNearby = validReports.filter(r => 
-                        r.creator === validReports[i].creator && 
-                        !removedIds.has(r.id) &&
-                        getDistance([validReports[i].lat, validReports[i].lng], [r.lat, r.lng]) < 100
-                    );
-
-                    if (userReportsNearby.length > 3) {
-                        // Deixa apenas o mais recente (presumindo que o ID tem timestamp ou apenas o primeiro do loop)
-                        // Marcamos os outros para remoção mantendo apenas o atual
-                        userReportsNearby.forEach((r, idx) => {
-                            if(idx > 0) removedIds.add(r.id);
-                        });
+                    if (expiry > new Date()) {
+                        reportCache.push(data);
                     }
-                }
-
-                // Aplicamos a primeira filtragem
-                let afterUserFilter = validReports.filter(r => !removedIds.has(r.id));
-
-                // 2. Limite Global por Proximidade (Agrupamento inteligente)
-                // Se > 4 reports num raio de 60m, mostra no máximo 5 (únicos por dono)
-                let finalVisibleReports = [];
-                let processedInRadius = new Set();
-
-                for(let i = 0; i < afterUserFilter.length; i++) {
-                    const current = afterUserFilter[i];
-                    if (processedInRadius.has(current.id)) continue;
-
-                    // Encontra vizinhos num raio de 60 metros
-                    let neighbors = afterUserFilter.filter(r => 
-                        getDistance([current.lat, current.lng], [r.lat, r.lng]) < 60
-                    );
-
-                    if (neighbors.length > 4) {
-                        // Se tem muita coisa junta, limitamos a 5 reports de donos DIFERENTES
-                        let uniqueOwners = [];
-                        let ownersSeen = new Set();
-                        
-                        // Ordenar por data (opcional) ou apenas pegar os primeiros únicos
-                        neighbors.forEach(n => {
-                            if (!ownersSeen.has(n.creator) && uniqueOwners.length < 5) {
-                                ownersSeen.add(n.creator);
-                                uniqueOwners.push(n);
-                            }
-                            processedInRadius.add(n.id);
-                        });
-                        
-                        finalVisibleReports.push(...uniqueOwners);
-                    } else {
-                        // Caso contrário, adiciona normalmente
-                        finalVisibleReports.push(current);
-                        processedInRadius.add(current.id);
-                    }
-                }
-
-                // Renderização final dos marcadores filtrados
-                finalVisibleReports.forEach(data => {
-                    let marker;
-
-                    // --- CUSTOMIZAÇÃO DE ÍCONES DE RADAR REPORTADOS (REQUISITO SOLICITADO) ---
-                    // Se o tipo for Radar, usamos os ícones personalizados de imagem
-                    if (data.type === 'Radar') {
-                        const radarIcon = data.subtype === 'Trânsito' ? ICON_RADAR_TRAFFIC : ICON_RADAR_SPEED;
-                        marker = L.marker([data.lat, data.lng], { icon: radarIcon });
-                    } else {
-                        // Para outros tipos, mantém o estilo original de círculo divIcon
-                        const markerColor = getReportColor(data.type);
-                        const markerIcon = L.divIcon({
-                            className: 'custom-div-icon',
-                            html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14"></i></div>`,
-                            iconSize: [30, 30],
-                            iconAnchor: [15, 15]
-                        });
-                        marker = L.marker([data.lat, data.lng], { icon: markerIcon });
-                    }
-
-                    marker.on('click', () => {
-                        showReportDetail(data.id, data);
-                    });
-                    
-                    marker.addTo(activeReportsLayer);
                 });
                 
-                lucide.createIcons();
+                // Primeira execução imediata para garantir que reports apareçam "no caminho final" ou antes de começar
+                renderFilteredReports();
             }, (error) => console.error("Erro snapshot:", error));
+
+            // --- IMPLEMENTAÇÃO REQUERIDA: LOOP DE 10S ---
+            // Atualiza a visualização a cada 10 segundos baseando-se no movimento e distância
+            setInterval(() => {
+                renderFilteredReports();
+            }, 10000);
+        }
+
+        /**
+         * Função principal de renderização baseada nos requisitos:
+         * 1. Apenas enquanto se move (>= 4km/h)
+         * 2. Limite de distância de 1.5km
+         * 3. Permite visualização no destino/caminho final antes de começar a viagem
+         */
+        function renderFilteredReports() {
+            if (!userPos) return;
+
+            // Se não estiver se movendo (pelo menos 4km/h), não atualiza a menos que não esteja navegando (pre-viagem)
+            // Isso garante que os reports apareçam no "caminho final" ou no mapa antes de dar o Start.
+            if (isNavigating && currentSpeed < 4) {
+                return; 
+            }
+
+            activeReportsLayer.clearLayers();
+
+            // Filtragem por distância (1.5km) a partir da posição do usuário
+            const visibleReports = reportCache.filter(report => {
+                const distToUser = getDistance(userPos, [report.lat, report.lng]);
+                
+                // Regra: até 1.5km do usuário
+                let isWithinRange = distToUser <= 1500;
+
+                // Regra Adicional: Também mostra se estiver perto do destino (caminho final)
+                if (destinationLatLng) {
+                    const distToDest = getDistance([destinationLatLng.lat, destinationLatLng.lng], [report.lat, report.lng]);
+                    if (distToDest <= 1500) isWithinRange = true;
+                }
+
+                return isWithinRange;
+            });
+
+            // Renderiza apenas os que passaram no filtro dinâmico
+            visibleReports.forEach(data => {
+                const markerColor = getReportColor(data.type);
+                const markerIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14"></i></div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                
+                const marker = L.marker([data.lat, data.lng], { icon: markerIcon });
+                marker.on('click', () => {
+                    showReportDetail(data.id, data);
+                });
+                marker.addTo(activeReportsLayer);
+            });
+            
+            lucide.createIcons();
         }
 
         function getReportColor(type) {
@@ -745,10 +701,12 @@
 
         function getReportDesc(type) {
             switch(type) {
-                case 'Polícia': return "Presença policial relatada recentemente.";
-                case 'Faixa Bloqueada': return "Via com interdição total ou parcial.";
+                case 'Polícia': return "Presença policial relatada recentemente. Tome cuidado.";
+                case 'Faixa Bloqueada': return "Via está bloqueada. Pode ser obra.";
                 case 'Acidente': return "Colisão ou incidente veicular na pista.";
                 case 'Radar': return "Fiscalização eletrônica reportada por usuários.";
+                case 'Obras': return "Esse lugar está com uma obra em andamento, pode estar bloqueada.";
+                case 'Trânsito Lento': return "Este lugar está com um trânsito lento, evite ista rua";
                 default: return "Evento relatado na via. Dirija com cuidado.";
             }
         }
@@ -977,22 +935,13 @@
                 data.features.forEach(feature => {
                     const props = feature.properties;
                     const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
-                    
-                    // --- CUSTOMIZAÇÃO DE ÍCONES DE RADAR DA API (REQUISITO SOLICITADO) ---
                     if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
                         let typeKey = props.osm_key === 'traffic_light' ? 'traffic_light' : 'fixed';
                         const rInfo = RADAR_DATA[typeKey];
-                        
-                        // Seleciona o ícone customizado baseado no tipo da API
-                        const radarIcon = typeKey === 'traffic_light' ? ICON_RADAR_TRAFFIC : ICON_RADAR_SPEED;
-                        
-                        L.marker(coords, { icon: radarIcon })
-                         .on('click', () => showRadarModal(rInfo))
-                         .addTo(alertLayer);
+                        const icon = L.divIcon({ className: '', html: `<div class="radar-dot ${rInfo.class}"></div>`, iconSize: [22, 22] });
+                        L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction') {
-                        L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 })
-                         .on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction'))
-                         .addTo(alertLayer);
+                        L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
             } catch(e) {}
