@@ -211,7 +211,7 @@
         .spinner { width: 40px; height: 40px; border: 4px solid #A855F7; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .report-marker { width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        .report-marker { width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; overflow: hidden; background-size: cover; background-position: center; }
 
         .config-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .config-select { background: #27272a; border-radius: 10px; padding: 8px; color: white; border: 1px solid #3f3f46; font-size: 14px; }
@@ -308,7 +308,7 @@
     <div id="proximity-alert-frame">
         <div class="black-minimal-card">
             <div class="flex items-center gap-5">
-                <div id="prox-icon-container" class="w-14 h-14 bg-zinc-900 rounded-2xl flex items-center justify-center">
+                <div id="prox-icon-container" class="w-14 h-14 bg-zinc-900 rounded-2xl flex items-center justify-center overflow-hidden bg-size-contain bg-no-repeat bg-center">
                     <!-- Ícone Dinâmico -->
                 </div>
                 <div class="flex-1">
@@ -326,7 +326,7 @@
 
     <div id="alert-modal" onclick="closeAlertModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"></div>
+            <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 overflow-hidden bg-cover bg-center"></div>
             <h2 id="alert-title" class="text-2xl font-black mb-2">Título</h2>
             <p id="alert-type" class="text-purple-500 font-bold text-xs uppercase tracking-widest mb-4">Tipo do Alerta</p>
             <div class="bg-white/5 p-4 rounded-2xl mb-6">
@@ -473,9 +473,16 @@
         let alertaFimTimeout = null;
         let jaVotouNesse = new Set(); // Controle para não mostrar botões se já votou
 
+        // IMPLEMENTAÇÃO REQUERIDA 1: Controle de alerta por viagem
+        let alertasMostradosNestaViagem = new Set();
+
+        // IMPLEMENTAÇÃO REQUERIDA 2: Links de ícones externos
+        const RADAR_VELOCIDADE_IMG = "https://raw.githubusercontent.com/catsblock/Catsblock-Car/refs/heads/main/Radar_velocidade.png";
+        const RADAR_TRANSITO_IMG = "https://raw.githubusercontent.com/catsblock/Catsblock-Car/refs/heads/main/Radar_trânsito.png";
+
         const RADAR_DATA = {
-            fixed: { title: "Radar de Velocidade", desc: "Monitoramento contínuo de velocidade.", lesson: "Ele evita que você corra demais, preservando os freios do seu carro.", type: "VELOCIDADE", icon: "gauge", class: "radar-speed" },
-            traffic_light: { title: "Radar de Semáforo", desc: "Captura avanço de sinal vermelho.", lesson: "Protege sua vida de colisões laterais.", type: "TRÂNSITO", icon: "traffic-light", class: "radar-traffic" },
+            fixed: { title: "Radar de Velocidade", desc: "Monitoramento contínuo de velocidade.", lesson: "Ele evita que você corra demais, preservando os freios do seu carro.", type: "VELOCIDADE", icon: "gauge", class: "radar-speed", externalIcon: RADAR_VELOCIDADE_IMG },
+            traffic_light: { title: "Radar de Semáforo", desc: "Captura avanço de sinal vermelho.", lesson: "Protege sua vida de colisões laterais.", type: "TRÂNSITO", icon: "traffic-light", class: "radar-traffic", externalIcon: RADAR_TRANSITO_IMG },
             bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
 
@@ -663,10 +670,19 @@
             });
 
             visibleReports.forEach(data => {
-                const markerColor = getReportColor(data.type);
+                const markerColor = getReportColor(data.type, data.subtype);
+                const markerIconUrl = getReportIcon(data.type, data.subtype, true);
+                
+                let iconHtml = '';
+                if (markerIconUrl.startsWith('http')) {
+                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:34px; height:34px;"></div>`;
+                } else {
+                    iconHtml = `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${markerIconUrl}" color="white" size="14"></i></div>`;
+                }
+
                 const markerIcon = L.divIcon({
                     className: 'custom-div-icon',
-                    html: `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${getReportIcon(data.type)}" color="white" size="14"></i></div>`,
+                    html: iconHtml,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
@@ -681,18 +697,28 @@
             lucide.createIcons();
         }
 
-        function getReportColor(type) {
+        // IMPLEMENTAÇÃO REQUERIDA 2: Lógica de cor e ícone com suporte a imagens externas
+        function getReportColor(type, subtype = "") {
+            if (type === 'Radar') {
+                if (subtype === 'Velocidade') return '#ff453a';
+                if (subtype === 'Trânsito') return '#facc15';
+                return '#A855F7';
+            }
             switch(type) {
                 case 'Polícia': return '#3b82f6';
                 case 'Obras': return '#f97316';
-                case 'Radar': return '#A855F7';
                 case 'Faixa Bloqueada': return '#ef4444';
                 case 'Acidente': return '#f43f5e';
                 default: return '#eab308';
             }
         }
 
-        function getReportIcon(type) {
+        // IMPLEMENTAÇÃO REQUERIDA 2: Retorna Lucide ou URL da imagem
+        function getReportIcon(type, subtype = "", forMapOrAlert = false) {
+            if (type === 'Radar' && forMapOrAlert) {
+                if (subtype === 'Velocidade') return RADAR_VELOCIDADE_IMG;
+                if (subtype === 'Trânsito') return RADAR_TRANSITO_IMG;
+            }
             switch(type) {
                 case 'Polícia': return 'shield-alert';
                 case 'Obras': return 'construction';
@@ -711,9 +737,16 @@
             document.getElementById('creator-id').innerText = data.creator;
             
             const iconBox = document.getElementById('alert-icon-box');
-            iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6`;
-            iconBox.style.backgroundColor = getReportColor(data.type);
-            iconBox.innerHTML = `<i data-lucide="${getReportIcon(data.type)}" color="white" size="32"></i>`;
+            const iconRef = getReportIcon(data.type, data.subtype, true);
+            
+            iconBox.style.backgroundColor = getReportColor(data.type, data.subtype);
+            if (iconRef.startsWith('http')) {
+                iconBox.style.backgroundImage = `url('${iconRef}')`;
+                iconBox.innerHTML = '';
+            } else {
+                iconBox.style.backgroundImage = 'none';
+                iconBox.innerHTML = `<i data-lucide="${iconRef}" color="white" size="32"></i>`;
+            }
             
             document.getElementById('report-meta').classList.remove('hidden');
             
@@ -805,7 +838,10 @@
             });
 
             if (foundNearby) {
-                updateProximityAlertUI(foundNearby, minDist);
+                // IMPLEMENTAÇÃO REQUERIDA 1: Verificação de "uma vez por reporte por viagem"
+                if (!alertasMostradosNestaViagem.has(foundNearby.id)) {
+                    updateProximityAlertUI(foundNearby, minDist);
+                }
             } else {
                 // Se não houver nenhum report a menos de 800m, e já estivermos com alerta aberto
                 if (activeAlertaReportId && !alertaPassou) {
@@ -831,6 +867,9 @@
                 activeAlertaReportId = report.id;
                 alertaPassou = false;
                 
+                // IMPLEMENTAÇÃO REQUERIDA 1: Registra que este reporte já disparou alerta nesta viagem
+                alertasMostradosNestaViagem.add(report.id);
+
                 // Animação de troca de frames
                 tripCard.classList.remove('active');
                 frame.classList.add('active');
@@ -839,9 +878,17 @@
                 speedUI.classList.add('ui-lift-active');
                 reportBtn.classList.add('ui-lift-active');
                 
-                // Configuração visual do ícone
-                iconContainer.style.backgroundColor = getReportColor(report.type);
-                iconContainer.innerHTML = `<i data-lucide="${getReportIcon(report.type)}" color="white" size="28"></i>`;
+                // IMPLEMENTAÇÃO REQUERIDA 2: Configuração visual do ícone com imagens externas
+                const iconRef = getReportIcon(report.type, report.subtype, true);
+                iconContainer.style.backgroundColor = getReportColor(report.type, report.subtype);
+                
+                if (iconRef.startsWith('http')) {
+                    iconContainer.style.backgroundImage = `url('${iconRef}')`;
+                    iconContainer.innerHTML = '';
+                } else {
+                    iconContainer.style.backgroundImage = 'none';
+                    iconContainer.innerHTML = `<i data-lucide="${iconRef}" color="white" size="28"></i>`;
+                }
                 lucide.createIcons();
             }
 
@@ -1086,7 +1133,16 @@
                     if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
                         let typeKey = props.osm_key === 'traffic_light' ? 'traffic_light' : 'fixed';
                         const rInfo = RADAR_DATA[typeKey];
-                        const icon = L.divIcon({ className: '', html: `<div class="radar-dot ${rInfo.class}"></div>`, iconSize: [22, 22] });
+                        
+                        // IMPLEMENTAÇÃO REQUERIDA 2: Uso das imagens de radar externas no mapa
+                        let iconHtml = '';
+                        if (rInfo.externalIcon) {
+                            iconHtml = `<div class="radar-dot" style="background-image:url('${rInfo.externalIcon}'); background-size:contain; border:none; box-shadow:none;"></div>`;
+                        } else {
+                            iconHtml = `<div class="radar-dot ${rInfo.class}"></div>`;
+                        }
+
+                        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [22, 22] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction') {
                         L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
@@ -1099,7 +1155,8 @@
             document.getElementById('report-meta').classList.add('hidden');
             document.getElementById('radar-lesson').classList.remove('hidden');
             document.getElementById('lesson-text').innerText = info.lesson;
-            showAlertModal(info.type, info.title, info.desc, info.icon);
+            // IMPLEMENTAÇÃO REQUERIDA 2: Passa a imagem externa para o modal de alerta se existir
+            showAlertModal(info.type, info.title, info.desc, info.externalIcon || info.icon);
         }
 
         function showAlertModal(typeTag, title, desc, iconType) {
@@ -1107,13 +1164,23 @@
             document.getElementById('alert-title').innerText = title;
             document.getElementById('alert-desc-text').innerText = desc;
             const iconBox = document.getElementById('alert-icon-box');
-            let color = "bg-zinc-700";
-            if (iconType === 'construction') color = "bg-orange-600";
-            if (iconType === 'gauge') color = "bg-red-600";
-            if (iconType === 'traffic-light') color = "bg-yellow-500";
-            if (iconType === 'bus') color = "bg-blue-600";
-            iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${color}`;
-            iconBox.innerHTML = `<i data-lucide="${iconType}" color="white" size="32"></i>`;
+            
+            // IMPLEMENTAÇÃO REQUERIDA 2: Renderização de ícone no modal
+            if (typeof iconType === 'string' && iconType.startsWith('http')) {
+                iconBox.style.backgroundImage = `url('${iconType}')`;
+                iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 bg-transparent bg-contain bg-center bg-no-repeat`;
+                iconBox.innerHTML = '';
+            } else {
+                iconBox.style.backgroundImage = 'none';
+                let color = "bg-zinc-700";
+                if (iconType === 'construction') color = "bg-orange-600";
+                if (iconType === 'gauge') color = "bg-red-600";
+                if (iconType === 'traffic-light') color = "bg-yellow-500";
+                if (iconType === 'bus') color = "bg-blue-600";
+                iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${color}`;
+                iconBox.innerHTML = `<i data-lucide="${iconType}" color="white" size="32"></i>`;
+            }
+
             lucide.createIcons();
             document.getElementById('alert-modal').style.display = 'flex';
         }
@@ -1233,6 +1300,9 @@
             renderFilteredReports();
 
             if(start) {
+                // IMPLEMENTAÇÃO REQUERIDA 1: Reseta a memória de alertas mostrados ao iniciar nova viagem
+                alertasMostradosNestaViagem.clear();
+
                 userInteracting = false; 
                 map.setZoom(19); 
                 updateVisionMode();
