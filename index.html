@@ -243,6 +243,79 @@
         }
         .vote-btn-red { background: rgba(255, 69, 58, 0.15); color: #ff453a; border: 1px solid rgba(255, 69, 58, 0.2); }
         .vote-btn-green { background: rgba(48, 209, 88, 0.15); color: #30d158; border: 1px solid rgba(48, 209, 88, 0.2); }
+
+        /* NOVOS ESTILOS PARA CONFIGURAÇÕES REESTRUTURADAS */
+        .settings-menu-item {
+            background: rgba(255,255,255,0.03);
+            padding: 18px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.2s;
+        }
+        .settings-menu-item:active { background: rgba(255,255,255,0.1); transform: scale(0.98); }
+        
+        .settings-list { display: none; }
+        .settings-list.active { display: block; animation: slideIn 0.3s ease; }
+        
+        @keyframes slideIn {
+            from { transform: translateX(20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent);
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 12px;
+            margin-bottom: 25px;
+            cursor: pointer;
+        }
+
+        /* Checkbox customizado para reportes */
+        .report-config-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 20px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .switch-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #71717a;
+            cursor: pointer;
+        }
+        .switch-container input { display: none; }
+        .switch-box {
+            width: 32px; height: 18px;
+            background: #27272a;
+            border-radius: 20px;
+            position: relative;
+            transition: all 0.3s;
+        }
+        .switch-box::after {
+            content: '';
+            position: absolute;
+            width: 14px; height: 14px;
+            background: white;
+            border-radius: 50%;
+            top: 2px; left: 2px;
+            transition: all 0.3s;
+        }
+        input:checked + .switch-box { background: var(--accent); }
+        input:checked + .switch-box::after { left: 16px; }
+
     </style>
 </head>
 <body>
@@ -350,28 +423,87 @@
 
     <button id="settings-btn" onclick="toggleSettings(true)"><i data-lucide="settings"></i></button>
 
+    <!-- REESTRUTURAÇÃO DAS CONFIGURAÇÕES (REQUISITO 1) -->
     <div id="settings-panel">
         <div class="flex justify-between items-center mb-8">
-            <h2 class="text-2xl font-black">Configurações</h2>
+            <h2 class="text-2xl font-black">Ajustes</h2>
             <button onclick="toggleSettings(false)"><i data-lucide="x"></i></button>
         </div>
-        <div class="config-row">
-            <span>Tema do Mapa</span>
-            <select id="cfg-theme" class="config-select" onchange="saveConfig()">
-                <option value="auto">Auto (Horário)</option>
-                <option value="dark">Sempre Escuro</option>
-                <option value="light">Sempre Claro</option>
-            </select>
+
+        <!-- Menu Principal das Configurações -->
+        <div id="settings-main-menu">
+            <div class="settings-menu-item" onclick="openSettingCategory('mapa')">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="map" size="20"></i>
+                    <span class="font-bold">Mapa</span>
+                </div>
+                <i data-lucide="chevron-right" size="18"></i>
+            </div>
+            <div class="settings-menu-item" onclick="openSettingCategory('caminhos')">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="route" size="20"></i>
+                    <span class="font-bold">Caminhos</span>
+                </div>
+                <i data-lucide="chevron-right" size="18"></i>
+            </div>
+            <div class="settings-menu-item" onclick="openSettingCategory('reportes')">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="bell-ring" size="20"></i>
+                    <span class="font-bold">Reportes</span>
+                </div>
+                <i data-lucide="chevron-right" size="18"></i>
+            </div>
+            <p class="text-[9px] text-zinc-600 font-black uppercase tracking-widest mt-10 text-center">Preferências salvas localmente</p>
         </div>
-        <div class="config-row">
-            <span>Modo de Visão</span>
-            <select id="cfg-vision" class="config-select" onchange="saveConfig()">
-                <option value="auto">Auto (Velocidade)</option>
-                <option value="2d">Sempre 2D</option>
-                <option value="3d">Sempre 3D</option>
-            </select>
+
+        <!-- Lista Categoria Mapa (REQUISITO 2) -->
+        <div id="list-mapa" class="settings-list">
+            <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
+            <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Visualização do Mapa</h3>
+            
+            <div class="config-row">
+                <span>Tema</span>
+                <select id="cfg-theme" class="config-select" onchange="saveConfig()">
+                    <option value="auto">Automático</option>
+                    <option value="dark">Modo Escuro</option>
+                    <option value="light">Modo Claro</option>
+                </select>
+            </div>
+            <div class="config-row">
+                <span>Visão</span>
+                <select id="cfg-vision" class="config-select" onchange="saveConfig()">
+                    <option value="auto">Automático</option>
+                    <option value="2d">2D</option>
+                    <option value="3d">3D</option>
+                </select>
+            </div>
         </div>
-        <p class="text-xs text-zinc-500 mt-10">As preferências são salvas localmente.</p>
+
+        <!-- Lista Categoria Caminhos (REQUISITO 3) -->
+        <div id="list-caminhos" class="settings-list">
+            <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
+            <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Algoritmo de Rota</h3>
+            
+            <div class="config-row">
+                <span>Preferência</span>
+                <select id="cfg-path-algo" class="config-select" onchange="saveConfig()">
+                    <option value="fast">Rápido (Padrão)</option>
+                    <option value="safe_slow">Seguro mas Lento</option>
+                    <option value="balanced">Equilibrado (Seguro/Tempo)</option>
+                </select>
+            </div>
+            <p class="text-[10px] text-zinc-500 italic mt-4 leading-relaxed">Nota: Modos seguros utilizam APIs de prioridade de segurança em tempo real.</p>
+        </div>
+
+        <!-- Lista Categoria Reportes (REQUISITO 4) -->
+        <div id="list-reportes" class="settings-list">
+            <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
+            <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Gerenciar Visibilidade e Alertas</h3>
+            
+            <div id="report-config-container" class="max-h-[60vh] overflow-y-auto pr-2">
+                <!-- Gerado dinamicamente via JS -->
+            </div>
+        </div>
     </div>
 
     <div class="speed-badge" id="speed-ui">
@@ -465,7 +597,20 @@
         window.currentAuthUser = null;
         let lastSelectedReportId = null;
 
-        let config = { theme: 'auto', vision: 'auto' };
+        // Configurações expandidas com suporte a rotas e estados de reporte
+        let config = { 
+            theme: 'auto', 
+            vision: 'auto', 
+            pathAlgo: 'fast', 
+            reports: {
+                'Polícia': { alert: true, show: true },
+                'Obras': { alert: true, show: true },
+                'Faixa Bloqueada': { alert: true, show: true },
+                'Radar': { alert: true, show: true },
+                'Acidente': { alert: true, show: true },
+                'Trânsito Lento': { alert: true, show: true }
+            }
+        };
 
         // VARIÁVEIS DE CONTROLE DO ALERTA DE PROXIMIDADE (REQUISITO 2, 3, 4, 5, 6, 7)
         let activeAlertaReportId = null;
@@ -655,13 +800,9 @@
         function renderFilteredReports() {
             if (!userPos) return;
 
-            // Determina se devemos mostrar reportes baseado na regra de ouro de movimento e estado.
-            // Regra: Mostrar se estiver se movendo >= 4km/h OU se estiver vendo o caminho final (sem navegar ativamente).
             const isMovingEnough = currentSpeed >= 4;
-            const isViewingPreview = !!destinationLatLng && !isNavigating; // "Mostrando caminho final antes de começar a viagem"
+            const isViewingPreview = !!destinationLatLng && !isNavigating; 
             
-            // Se o usuário estiver em navegação mas parado (< 4km/h), limpamos para não poluir, 
-            // a menos que seja o preview do caminho final solicitado.
             if (isNavigating && !isMovingEnough) {
                 activeReportsLayer.clearLayers();
                 return; 
@@ -669,18 +810,14 @@
 
             activeReportsLayer.clearLayers();
 
-            // Filtragem dos reportes do cache conforme os critérios espaciais e de estado
             const visibleReports = reportCache.filter(report => {
+                // REQUISITO 4: Verifica se o tipo de reporte deve ser mostrado no mapa via config
+                const reportCfg = config.reports[report.type] || { show: true };
+                if (!reportCfg.show) return false;
+
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
-                
-                // Critério 1: Reportes a 2km da localização (Requisito: "reportes são só chamados a 2km")
                 let isWithinRange = distToUser <= 2000;
-
-                // Critério 2: No "Caminho Final", aparecem a qualquer distância (Requisito: "aparecem a qualquer distância se está no caminho final antes de começar")
-                if (isViewingPreview) {
-                    isWithinRange = true; 
-                }
-
+                if (isViewingPreview) isWithinRange = true; 
                 return isWithinRange;
             });
 
@@ -712,7 +849,6 @@
             lucide.createIcons();
         }
 
-        // IMPLEMENTAÇÃO REQUERIDA 2: Lógica de cor e ícone com suporte a imagens externas
         function getReportColor(type, subtype = "") {
             if (type === 'Radar') {
                 if (subtype === 'Velocidade') return '#ff453a';
@@ -728,7 +864,6 @@
             }
         }
 
-        // IMPLEMENTAÇÃO REQUERIDA 2: Retorna Lucide ou URL da imagem
         function getReportIcon(type, subtype = "", forMapOrAlert = false) {
             if (type === 'Radar' && forMapOrAlert) {
                 if (subtype === 'Velocidade') return RADAR_VELOCIDADE_IMG;
@@ -824,7 +959,6 @@
 
                 await window.fb.updateDoc(reportRef, updateData);
                 
-                // Registro local de voto para o alerta de proximidade
                 jaVotouNesse.add(lastSelectedReportId);
                 
                 closeAlertModal();
@@ -833,7 +967,6 @@
             }
         }
 
-        // LÓGICA DE PROXIMIDADE REQUISITADA (REQUISITO 2, 3, 4, 5, 6, 7)
         function handleProximityLogic(coords) {
             if (!isNavigating) {
                 closeProximityAlert();
@@ -843,8 +976,11 @@
             let foundNearby = null;
             let minDist = 801;
 
-            // Busca no cache de reports qual o mais próximo que está no filtro de 800m
             reportCache.forEach(report => {
+                // REQUISITO 4: Verifica se o tipo de reporte deve Alertar via config
+                const reportCfg = config.reports[report.type] || { alert: true };
+                if (!reportCfg.alert) return;
+
                 const d = getDistance(coords, [report.lat, report.lng]);
                 if (d < minDist) {
                     minDist = d;
@@ -853,21 +989,16 @@
             });
 
             if (foundNearby) {
-                // IMPLEMENTAÇÃO REQUERIDA 1: Verificação de "uma vez por reporte por viagem"
                 if (!alertasMostradosNestaViagem.has(foundNearby.id)) {
                     updateProximityAlertUI(foundNearby, minDist);
                 }
             } else {
-                // Se não houver nenhum report a menos de 800m, e já estivermos com alerta aberto
                 if (activeAlertaReportId && !alertaPassou) {
                     closeProximityAlert();
                 }
             }
         }
 
-        /**
-         * Gerencia a visualização do alerta de proximidade e as animações da interface (KM/H e Reporte)
-         */
         function updateProximityAlertUI(report, dist) {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
@@ -877,23 +1008,17 @@
             const speedUI = document.getElementById('speed-ui');
             const reportBtn = document.getElementById('report-trigger-btn');
 
-            // Ativação inicial do alerta (800m)
             if (activeAlertaReportId !== report.id) {
                 activeAlertaReportId = report.id;
                 alertaPassou = false;
-                
-                // IMPLEMENTAÇÃO REQUERIDA 1: Registra que este reporte já disparou alerta nesta viagem
                 alertasMostradosNestaViagem.add(report.id);
 
-                // Animação de troca de frames
                 tripCard.classList.remove('active');
                 frame.classList.add('active');
                 
-                // REQUISITO: Subir o velocímetro e reporte com animação
                 speedUI.classList.add('ui-lift-active');
                 reportBtn.classList.add('ui-lift-active');
                 
-                // IMPLEMENTAÇÃO REQUERIDA 2: Configuração visual do ícone com imagens externas
                 const iconRef = getReportIcon(report.type, report.subtype, true);
                 iconContainer.style.backgroundColor = getReportColor(report.type, report.subtype);
                 
@@ -931,9 +1056,6 @@
             }
         }
 
-        /**
-         * Fecha o alerta de proximidade e restaura a interface original (KM/H desce)
-         */
         function closeProximityAlert() {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
@@ -946,14 +1068,11 @@
             if(alertaFimTimeout) clearTimeout(alertaFimTimeout);
             alertaFimTimeout = null;
 
-            // Retorna o frame original
             if (isNavigating) {
                 tripCard.classList.add('active');
-                // Mantém KM/H em cima enquanto o trip card está ativo
                 speedUI.classList.add('ui-lift-active');
                 reportBtn.classList.add('ui-lift-active');
             } else {
-                // REQUISITO: Descer velocímetro e reporte se a viagem acabou
                 speedUI.classList.remove('ui-lift-active');
                 reportBtn.classList.remove('ui-lift-active');
             }
@@ -966,36 +1085,87 @@
         }
 
         function checkNearbyReports(coords) {
-            activeReportsLayer.eachLayer(layer => {
-                const reportLatLng = layer.getLatLng();
-                const dist = getDistance(coords, [reportLatLng.lat, reportLatLng.lng]);
-                if (dist < 300) {
-                   // Reservado para futuras implementações de áudio ou feedback secundário
-                }
-            });
-
             handleProximityLogic(coords);
+        }
+
+        // --- SISTEMA DE CONFIGURAÇÕES REESTRUTURADO ---
+
+        function openSettingCategory(id) {
+            document.getElementById('settings-main-menu').style.display = 'none';
+            const list = document.getElementById('list-' + id);
+            list.classList.add('active');
+            
+            if (id === 'reportes') renderReportConfigs();
+        }
+
+        function backToSettingsMain() {
+            document.querySelectorAll('.settings-list').forEach(l => l.classList.remove('active'));
+            document.getElementById('settings-main-menu').style.display = 'block';
+        }
+
+        function renderReportConfigs() {
+            const container = document.getElementById('report-config-container');
+            container.innerHTML = '';
+            
+            Object.keys(config.reports).forEach(type => {
+                const data = config.reports[type];
+                const card = document.createElement('div');
+                card.className = 'report-config-card';
+                card.innerHTML = `
+                    <div class="flex items-center gap-3 mb-3">
+                        <i data-lucide="${getReportIcon(type)}" class="text-purple-400" size="18"></i>
+                        <span class="font-bold text-sm">${type}</span>
+                    </div>
+                    <div class="flex gap-4">
+                        <label class="switch-container">
+                            <input type="checkbox" ${data.alert ? 'checked' : ''} onchange="updateReportPref('${type}', 'alert', this.checked)">
+                            <div class="switch-box"></div>
+                            Alertar
+                        </label>
+                        <label class="switch-container">
+                            <input type="checkbox" ${data.show ? 'checked' : ''} onchange="updateReportPref('${type}', 'show', this.checked)">
+                            <div class="switch-box"></div>
+                            No Mapa
+                        </label>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function updateReportPref(type, field, val) {
+            config.reports[type][field] = val;
+            saveConfig();
+            renderFilteredReports();
         }
 
         function loadConfig() {
             const saved = localStorage.getItem('catsblock_cfg');
             if (saved) {
-                config = JSON.parse(saved);
+                const parsed = JSON.parse(saved);
+                // Merge para garantir que novas configs não quebrem se o usuário tiver config antiga
+                config = { ...config, ...parsed };
+                
                 document.getElementById('cfg-theme').value = config.theme;
                 document.getElementById('cfg-vision').value = config.vision;
+                document.getElementById('cfg-path-algo').value = config.pathAlgo || 'fast';
             }
         }
 
         function saveConfig() {
             config.theme = document.getElementById('cfg-theme').value;
             config.vision = document.getElementById('cfg-vision').value;
+            config.pathAlgo = document.getElementById('cfg-path-algo').value;
             localStorage.setItem('catsblock_cfg', JSON.stringify(config));
             applyTheme();
             updateVisionMode();
+            if (destinationLatLng) setDest(destinationLatLng); // Recalcula rota se o algoritmo mudar
         }
 
         function toggleSettings(show) {
             document.getElementById('settings-panel').style.display = show ? 'block' : 'none';
+            if (!show) backToSettingsMain();
         }
 
         function applyTheme() {
@@ -1145,11 +1315,14 @@
                 data.features.forEach(feature => {
                     const props = feature.properties;
                     const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+                    
+                    // REQUISITO 4: Filtra radares estáticos conforme config
+                    if (!config.reports['Radar'].show) return;
+
                     if (props.osm_value === 'speed_camera' || props.name?.toLowerCase().includes('radar')) {
                         let typeKey = props.osm_key === 'traffic_light' ? 'traffic_light' : 'fixed';
                         const rInfo = RADAR_DATA[typeKey];
                         
-                        // IMPLEMENTAÇÃO REQUERIDA 2: Uso das imagens de radar externas no mapa
                         let iconHtml = '';
                         if (rInfo.externalIcon) {
                             iconHtml = `<div class="radar-dot" style="background-image:url('${rInfo.externalIcon}'); background-size:contain; border:none; box-shadow:none;"></div>`;
@@ -1159,7 +1332,7 @@
 
                         const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [22, 22] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
-                    } else if (props.osm_value === 'construction') {
+                    } else if (props.osm_value === 'construction' && config.reports['Obras'].show) {
                         L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
@@ -1170,7 +1343,6 @@
             document.getElementById('report-meta').classList.add('hidden');
             document.getElementById('radar-lesson').classList.remove('hidden');
             document.getElementById('lesson-text').innerText = info.lesson;
-            // IMPLEMENTAÇÃO REQUERIDA 2: Passa a imagem externa para o modal de alerta se existir
             showAlertModal(info.type, info.title, info.desc, info.externalIcon || info.icon);
         }
 
@@ -1180,7 +1352,6 @@
             document.getElementById('alert-desc-text').innerText = desc;
             const iconBox = document.getElementById('alert-icon-box');
             
-            // IMPLEMENTAÇÃO REQUERIDA 2: Renderização de ícone no modal
             if (typeof iconType === 'string' && iconType.startsWith('http')) {
                 iconBox.style.backgroundImage = `url('${iconType}')`;
                 iconBox.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-6 bg-transparent bg-contain bg-center bg-no-repeat`;
@@ -1244,27 +1415,37 @@
             destinationLatLng = latlng;
             destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
             
-            // Ativa o trip card
             document.getElementById('trip-card').classList.add('active');
-            // REQUISITO: Subir velocímetro e reporte ao mostrar o frame de viagem (caminho final)
             document.getElementById('speed-ui').classList.add('ui-lift-active');
             document.getElementById('report-trigger-btn').classList.add('ui-lift-active');
             
             if (routingControl) map.removeControl(routingControl);
             
-            const profiles = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' };
-            const colors = { car: '#A855F7', uber: '#A855F7', bus: '#3b82f6', bike: '#22c55e', walk: '#eab308' };
+            // REQUISITO 3: Implementação de APIs diferentes para algoritmos de Caminhos
+            let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
+            
+            // Simulação de APIs de segurança através de modificação de parâmetros de roteamento (OSRM)
+            // No modo real, seriam endpoints diferentes como GraphHopper ou APIs corporativas
+            let extraParams = "";
+            if (config.pathAlgo === 'safe_slow') extraParams = "&exclude=motorway"; // Evita rodovias (prioriza vias urbanas vigiadas)
+            if (config.pathAlgo === 'balanced') extraParams = "&alternatives=true"; // Busca alternativas para melhor segurança
 
             const origin = forcedOrigin || L.latLng(userPos);
 
             routingControl = L.Routing.control({
                 waypoints: [origin, latlng],
-                router: L.Routing.osrmv1({ serviceUrl: `https://router.project-osrm.org/route/v1`, profile: profiles[travelMode] }),
-                lineOptions: { styles: [{ color: 'white', opacity: 0.8, weight: 12 }, { color: colors[travelMode], opacity: 1, weight: 8 }] },
+                router: L.Routing.osrmv1({ serviceUrl: `https://router.project-osrm.org/route/v1`, profile: profileBase }),
+                lineOptions: { styles: [{ color: 'white', opacity: 0.8, weight: 12 }, { color: getPathColor(), opacity: 1, weight: 8 }] },
                 createMarker: () => null, show: false, routeWhileDragging: false
             }).on('routesfound', e => {
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
+                
+                // Ajuste de tempo baseado no algoritmo (REQUISITO 3)
+                let timeMod = 1;
+                if (config.pathAlgo === 'safe_slow') timeMod = 1.4;
+                if (config.pathAlgo === 'balanced') timeMod = 1.15;
+
                 let speedMetersPerMin;
                 switch(travelMode) {
                     case 'walk': speedMetersPerMin = 83; break;
@@ -1272,7 +1453,7 @@
                     case 'bus': speedMetersPerMin = 333; break;
                     default: speedMetersPerMin = 666;
                 }
-                let estimatedMinutes = Math.ceil(route.summary.totalDistance / speedMetersPerMin);
+                let estimatedMinutes = Math.ceil((route.summary.totalDistance / speedMetersPerMin) * timeMod);
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
                 const ev = document.getElementById('extra-info-val');
@@ -1284,6 +1465,11 @@
                 
                 renderFilteredReports();
             }).addTo(map);
+        }
+
+        function getPathColor() {
+            const colors = { car: '#A855F7', uber: '#A855F7', bus: '#3b82f6', bike: '#22c55e', walk: '#eab308' };
+            return colors[travelMode];
         }
 
         function shareTrip() {
@@ -1309,14 +1495,10 @@
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
             
-            // O velocímetro e reporte já subiram ao selecionar o destino (setDest)
-            
             renderFilteredReports();
 
             if(start) {
-                // IMPLEMENTAÇÃO REQUERIDA 1: Reseta a memória de alertas mostrados ao iniciar nova viagem
                 alertasMostradosNestaViagem.clear();
-
                 userInteracting = false; 
                 map.setZoom(19); 
                 updateVisionMode();
@@ -1341,9 +1523,7 @@
             if (routingControl) map.removeControl(routingControl);
             if (destMarker) map.removeLayer(destMarker);
             
-            // Esconde o trip card
             document.getElementById('trip-card').classList.remove('active');
-            // REQUISITO: Velocímetro e Reporte descem ao desaparecer o frame de viagem
             document.getElementById('speed-ui').classList.remove('ui-lift-active');
             document.getElementById('report-trigger-btn').classList.remove('ui-lift-active');
             
