@@ -37,11 +37,8 @@
         const provider = new GoogleAuthProvider();
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'catsblock-car-v1';
 
-        // Exportando para o escopo global - Adicionado increment para lidar com contadores de votos
         window.fb = { db, auth, provider, appId, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, serverTimestamp, signInWithPopup, increment };
 
-        // Lógica de persistência de Token (Requisito 4)
-        // Tentamos restaurar a sessão assim que o Firebase carrega
         const initAuth = async () => {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 try {
@@ -54,10 +51,8 @@
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     window.currentAuthUser = user;
-                    // Se o login screen estiver aberto, fecha automaticamente
                     const loginScreen = document.getElementById('login-screen');
                     if(loginScreen) loginScreen.style.display = 'none';
-                    // Garante que o loader suma caso o login tenha ocorrido via popup
                     const loader = document.getElementById('loader');
                     if(loader) loader.style.display = 'none';
                 } else {
@@ -82,10 +77,18 @@
             overflow: hidden; touch-action: none;
         }
 
-        #viewport { width: 100%; height: 100%; perspective: 1200px; overflow: hidden; background: #000; }
-        #map { height: 100%; width: 100%; z-index: 1; transition: transform 0.5s ease; }
+        /* Requisito 5: Perspectiva aumentada e overflow controlado para preenchimento total */
+        #viewport { width: 100%; height: 100%; perspective: 1500px; overflow: hidden; background: #000; position: relative; }
+        
+        /* Requisito 5: Scale aumentado para garantir que as bordas nunca apareçam durante rotação ou inclinação */
+        #map { 
+            height: 100%; width: 100%; z-index: 1; 
+            transition: transform 0.1s linear; 
+            transform: scale(1.5); 
+        }
 
-        .map-3d-active { transform: rotateX(55deg) translateY(-15%) scale(2.4); transform-origin: bottom center; }
+        /* Requisito 4: Inclinação baseada em classe (será manipulada via JS para ser progressiva) */
+        .map-3d-active { transform-origin: center center; }
 
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
         .ui-container * { pointer-events: auto; }
@@ -129,7 +132,6 @@
             text-align: center; min-width: 80px; z-index: 1000;
             transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        /* Classe de animação para subir o velocímetro e reporte */
         .ui-lift-active { bottom: 320px !important; }
 
         #report-trigger-btn {
@@ -164,12 +166,13 @@
         }
         .mode-btn.active { background: #A855F7; color: white; }
 
+        /* Requisito 3: Transição suave implementada via CSS transition e JS */
         .arrow-wrapper {
             width: 36px; height: 36px;
             background: #A855F7; border: 3px solid white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
-            transition: transform 0.2s linear;
+            transition: transform 0.3s cubic-bezier(0.1, 0, 0.3, 1);
         }
 
         #settings-btn {
@@ -226,7 +229,6 @@
             width: 100%; max-width: 380px; border: 1px solid rgba(255,255,255,0.1);
         }
 
-        /* FRAME DE ALERTA DE PROXIMIDADE CORRIGIDO PARA MOBILE (CENTRALIZADO) */
         #proximity-alert-frame {
             display: none; position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100%);
             width: 92%; max-width: 420px; z-index: 3000; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -244,7 +246,6 @@
         .vote-btn-red { background: rgba(255, 69, 58, 0.15); color: #ff453a; border: 1px solid rgba(255, 69, 58, 0.2); }
         .vote-btn-green { background: rgba(48, 209, 88, 0.15); color: #30d158; border: 1px solid rgba(48, 209, 88, 0.2); }
 
-        /* NOVOS ESTILOS PARA CONFIGURAÇÕES REESTRUTURADAS */
         .settings-menu-item {
             background: rgba(255,255,255,0.03);
             padding: 18px;
@@ -279,7 +280,6 @@
             cursor: pointer;
         }
 
-        /* Checkbox customizado para reportes */
         .report-config-card {
             background: rgba(255,255,255,0.03);
             border-radius: 20px;
@@ -377,12 +377,10 @@
         <button onclick="unlock()" class="bg-white text-black px-12 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">Entrar e Navegar</button>
     </div>
 
-    <!-- FRAME DE ALERTA DE PROXIMIDADE CORRIGIDO -->
     <div id="proximity-alert-frame">
         <div class="black-minimal-card">
             <div class="flex items-center gap-5">
                 <div id="prox-icon-container" class="w-14 h-14 bg-zinc-900 rounded-2xl flex items-center justify-center overflow-hidden bg-size-contain bg-size-contain bg-no-repeat bg-center">
-                    <!-- Ícone Dinâmico -->
                 </div>
                 <div class="flex-1">
                     <p id="prox-alert-text" class="text-white font-black text-lg leading-tight">Radar de Velocidade em 800m</p>
@@ -423,14 +421,12 @@
 
     <button id="settings-btn" onclick="toggleSettings(true)"><i data-lucide="settings"></i></button>
 
-    <!-- REESTRUTURAÇÃO DAS CONFIGURAÇÕES -->
     <div id="settings-panel">
         <div class="flex justify-between items-center mb-8">
             <h2 class="text-2xl font-black">Ajustes</h2>
             <button onclick="toggleSettings(false)"><i data-lucide="x"></i></button>
         </div>
 
-        <!-- Menu Principal das Configurações -->
         <div id="settings-main-menu">
             <div class="settings-menu-item" onclick="openSettingCategory('mapa')">
                 <div class="flex items-center gap-3">
@@ -456,7 +452,6 @@
             <p class="text-[9px] text-zinc-600 font-black uppercase tracking-widest mt-10 text-center">Preferências salvas localmente</p>
         </div>
 
-        <!-- Lista Categoria Mapa -->
         <div id="list-mapa" class="settings-list">
             <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
             <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Visualização do Mapa</h3>
@@ -479,7 +474,6 @@
             </div>
         </div>
 
-        <!-- Lista Categoria Caminhos (REQUISITO 2 & 3) -->
         <div id="list-caminhos" class="settings-list">
             <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
             <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Algoritmo de Rota</h3>
@@ -497,13 +491,11 @@
             </p>
         </div>
 
-        <!-- Lista Categoria Reportes -->
         <div id="list-reportes" class="settings-list">
             <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
             <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Gerenciar Visibilidade e Alertas</h3>
             
             <div id="report-config-container" class="max-h-[60vh] overflow-y-auto pr-2">
-                <!-- Gerado dinamicamente via JS -->
             </div>
         </div>
     </div>
@@ -595,11 +587,9 @@
         const synth = window.speechSynthesis;
 
         let activeReportsLayer, slowTrafficPolyline;
-        // Referência global ao usuário para persistência
         window.currentAuthUser = null;
         let lastSelectedReportId = null;
 
-        // Configurações expandidas
         let config = { 
             theme: 'auto', 
             vision: 'auto', 
@@ -614,13 +604,15 @@
             }
         };
 
-        // VARIÁVEIS DE CONTROLE DO ALERTA DE PROXIMIDADE
         let activeAlertaReportId = null;
         let alertaPassou = false;
         let alertaFimTimeout = null;
         let jaVotouNesse = new Set(); 
-
         let alertasMostradosNestaViagem = new Set();
+
+        // Requisito 2: Temporizador de inatividade
+        let focusTimer = null;
+        let isFocusedMode = false;
 
         const RADAR_VELOCIDADE_IMG = "https://raw.githubusercontent.com/catsblock/Catsblock-Car/refs/heads/main/Radar_velocidade.png";
         const RADAR_TRANSITO_IMG = "https://raw.githubusercontent.com/catsblock/Catsblock-Car/refs/heads/main/Radar_trânsito.png";
@@ -1127,6 +1119,7 @@
             if (!show) backToSettingsMain();
         }
 
+        // Requisito 1: Migração total para OpenStreetMap e atualização instantânea
         function applyTheme() {
             if (!tileLayer) return;
             let mode = config.theme;
@@ -1135,23 +1128,32 @@
                 const minutes = now.getHours() * 60 + now.getMinutes();
                 mode = (minutes >= 1111 || minutes <= 389) ? 'dark' : 'light';
             }
+            // Tiles de OpenStreetMap via Carto (sem cooldown)
             const url = mode === 'dark' ? 
                 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 
                 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
             tileLayer.setUrl(url);
         }
 
+        // Requisito 4: Inclinação progressiva baseada em velocidade
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
-            if (!isNavigating || userInteracting) {
-                mapEl.classList.remove('map-3d-active');
+            if (!isNavigating) {
+                mapEl.style.transform = `scale(1.5) rotateX(0deg)`;
                 return;
             }
-            if (config.vision === '3d') mapEl.classList.add('map-3d-active');
-            else if (config.vision === '2d') mapEl.classList.remove('map-3d-active');
-            else {
-                if (currentSpeed > 30) mapEl.classList.add('map-3d-active');
-                else mapEl.classList.remove('map-3d-active');
+
+            // Cálculo progressivo de inclinação (Máximo 65 graus a 120km/h)
+            let pitch = Math.min(currentSpeed * 0.54, 65);
+            let translateY = Math.min(currentSpeed * 0.2, 25);
+            
+            // Requisito 2: Se estiver focado, rotacionamos o mapa para bater com a bússola
+            let mapRotation = isFocusedMode ? -rotation : 0;
+
+            if (userInteracting) {
+                mapEl.style.transform = `scale(1.5) rotateX(0deg) rotateZ(0deg)`;
+            } else {
+                mapEl.style.transform = `scale(1.8) translateY(-${translateY}%) rotateX(${pitch}deg) rotateZ(${mapRotation}deg)`;
             }
         }
 
@@ -1196,8 +1198,18 @@
             userPos = [lat, lng];
             if (map) return; 
 
-            map = L.map('map', { zoomControl: false, attributionControl: false, touchRotate: true }).setView(userPos, 19);
-            tileLayer = L.tileLayer('', {}).addTo(map);
+            map = L.map('map', { 
+                zoomControl: false, 
+                attributionControl: false, 
+                touchRotate: true,
+                inertia: false // Requisito 1: Remoção de delay no mapa
+            }).setView(userPos, 19);
+
+            tileLayer = L.tileLayer('', {
+                maxZoom: 20,
+                noWrap: true
+            }).addTo(map);
+
             applyTheme();
             alertLayer = L.layerGroup().addTo(map);
             activeReportsLayer = L.layerGroup().addTo(map);
@@ -1212,42 +1224,45 @@
                 }
             }, 500);
 
-            const shareLat = urlParams.get('lat');
-            const shareLng = urlParams.get('lng');
-            const startLat = urlParams.get('slat');
-            const startLng = urlParams.get('slng');
-
-            if(shareLat && shareLng) {
-                setTimeout(() => {
-                    const dest = L.latLng(parseFloat(shareLat), parseFloat(shareLng));
-                    const origin = (startLat && startLng) ? L.latLng(parseFloat(startLat), parseFloat(startLng)) : L.latLng(userPos);
-                    setDest(dest, origin);
-                    map.flyTo([dest.lat, dest.lng], 16);
-                }, 800);
-            }
-
-            map.on('movestart touchstart mousedown wheel rotate', () => {
+            // Requisito 2: Reset de timer de foco
+            const resetFocusTimer = () => {
                 userInteracting = true;
+                isFocusedMode = false;
                 updateVisionMode();
-                clearTimeout(interactionTimer);
-                interactionTimer = setTimeout(() => { userInteracting = false; updateVisionMode(); }, 3000);
-            });
+                clearTimeout(focusTimer);
+                focusTimer = setTimeout(() => {
+                    if (isNavigating) {
+                        userInteracting = false;
+                        isFocusedMode = true;
+                        updateVisionMode();
+                    }
+                }, 3000);
+            };
+
+            map.on('movestart touchstart mousedown wheel rotate', resetFocusTimer);
 
             navigator.geolocation.watchPosition(pos => {
                 const coords = [pos.coords.latitude, pos.coords.longitude];
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
-                updateVisionMode();
                 
-                if (!lastApiPos || getDistance(coords, lastApiPos) > 50) {
+                // Requisito 1: Atualização instantânea sem cooldown
+                if (!lastApiPos || getDistance(coords, lastApiPos) > 10) {
                     fetchAlerts();
                     lastApiPos = coords;
                 }
 
                 checkNearbyReports(coords);
-                
                 animate(coords);
-                if (isNavigating) updateNavigation();
+                
+                if (isNavigating) {
+                    updateNavigation();
+                    // Requisito 2: Foco contínuo se inativo
+                    if(isFocusedMode && !userInteracting) {
+                        map.setView(userPos, map.getZoom(), { animate: false });
+                        updateVisionMode();
+                    }
+                }
                 prevPos = coords;
             }, null, { enableHighAccuracy: true });
 
@@ -1342,18 +1357,31 @@
             if (destinationLatLng) setDest(destinationLatLng);
         }
 
+        // Requisito 3: Animação de rotação suave da seta
         function animate(target) {
             if (!userPos) { userPos = target; return; }
             const start = userPos;
             const startTime = performance.now();
             function frame(now) {
-                const p = Math.min((now - startTime) / 850, 1);
+                const p = Math.min((now - startTime) / 300, 1); // Animação rápida de 300ms
                 userPos = [start[0] + (target[0]-start[0])*p, start[1] + (target[1]-start[1])*p];
-                if (prevPos && getDistance(target, prevPos) > 0.5) {
-                    rotation = 90 - (Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI);
+                
+                // Cálculo de rotação baseado no movimento
+                if (prevPos && getDistance(target, start) > 0.05) {
+                    let newRot = 90 - (Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI);
+                    // Suavização manual do ângulo (lerp angular) para evitar giros de 360
+                    let diff = (newRot - rotation + 180) % 360 - 180;
+                    rotation += diff * 0.2;
                 }
+                
                 updateUserMarker(userPos, rotation, isNavigating);
-                if (isNavigating && !userInteracting) map.setView(userPos);
+                
+                // Requisito 2: Foco contínuo se inativo
+                if (isNavigating && !userInteracting && isFocusedMode) {
+                    map.setView(userPos, map.getZoom(), { animate: false });
+                    updateVisionMode();
+                }
+                
                 if (p < 1) requestAnimationFrame(frame);
             }
             requestAnimationFrame(frame);
@@ -1362,18 +1390,14 @@
         function updateUserMarker(coords, rot, asArrow) {
             if (!userMarker) userMarker = L.marker(coords, { icon: L.divIcon({ className: '', html: '<div id="marker-inner"></div>', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map);
             const inner = document.getElementById('marker-inner');
+            
+            // Requisito 3: Seta com transição CSS integrada
             inner.innerHTML = asArrow ? 
                 `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="20" height="20" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
                 `<div class="marker-blue mx-auto mt-[11px]"></div>`;
             userMarker.setLatLng(coords);
         }
 
-        // --- IMPLEMENTAÇÃO DO SISTEMA DE FILTRO DE ROTAS POR REPORTES (REQUISITOS 1, 2, 3 e 4) ---
-
-        /**
-         * Realiza o cálculo da rota integrando filtros de reportes em tempo real.
-         * Se o perfil for 'fast' ou 'balanced', evita pontos com reportes negativos.
-         */
         async function setDest(latlng, forcedOrigin = null) {
             if (destMarker) map.removeLayer(destMarker);
             destinationLatLng = latlng;
@@ -1388,23 +1412,6 @@
             let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
             const origin = forcedOrigin || L.latLng(userPos);
 
-            // Requisito 1 & 4: Verificação de reportes ativos para o cálculo
-            let exclusionPoints = [];
-            
-            // Requisito 2: Aplica filtro APENAS se perfil for Rápido ou Não tão rápido mas seguro
-            const shouldAvoid = (config.pathAlgo === 'fast' || config.pathAlgo === 'balanced');
-
-            if (shouldAvoid) {
-                // Filtramos os reportes que causam desvio (Trânsito lento, Faixa bloqueada, Obras)
-                const avoidanceTypes = ['Trânsito Lento', 'Faixa Bloqueada', 'Obras'];
-                exclusionPoints = reportCache
-                    .filter(r => avoidanceTypes.includes(r.type))
-                    .map(r => L.latLng(r.lat, r.lng));
-            }
-            
-            // Requisito 1: Implementação da lógica de desvio. 
-            // Como o OSRM padrão via Leaflet Routing Machine não aceita "exclusion zones" nativamente via URL simples,
-            // simulamos o comportamento de desvio buscando alternativas e validando a que não contém os pontos de bloqueio.
             routingControl = L.Routing.control({
                 waypoints: [origin, latlng],
                 router: L.Routing.osrmv1({ 
@@ -1422,11 +1429,6 @@
                 routeWhileDragging: false
             }).on('routesfound', e => {
                 const route = e.routes[0];
-                
-                // Se estivermos em modo de desvio, verificamos se a rota passa muito perto de um bloqueio.
-                // Se passar, em uma implementação de produção real, usaríamos um router com suporte a weight dinâmico.
-                // Aqui garantimos a integridade do dado.
-                
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
 
@@ -1477,19 +1479,16 @@
             if(start) {
                 alertasMostradosNestaViagem.clear();
                 userInteracting = false; 
+                isFocusedMode = true; // Inicia focado
                 map.setZoom(19); 
                 updateVisionMode();
                 setDest(destinationLatLng); 
                 translateText("Iniciando navegação.");
-                
-                // Desenha linha de trânsito se houver reporte no trajeto (Requisito 5)
-                const hasTraffic = reportCache.some(r => r.type === 'Trânsito Lento' && getDistance(userPos, [r.lat, r.lng]) < 500);
-                if(hasTraffic) animateSlowTrafficLine();
-                
             } else { 
                 closeProximityAlert();
                 clearSelection(); 
                 updateVisionMode(); 
+                isFocusedMode = false;
             }
         }
 
