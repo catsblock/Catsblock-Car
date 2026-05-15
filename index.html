@@ -810,9 +810,18 @@
 
             activeReportsLayer.clearLayers();
 
+            // Requisito 1 & 2: Checagem de zoom
+            const currentZoom = map.getZoom();
+
             const visibleReports = reportCache.filter(report => {
                 const reportCfg = config.reports[report.type] || { show: true };
                 if (!reportCfg.show) return false;
+
+                // Implementação Requisito 1: Radares somem no zoom 15
+                if (report.type === 'Radar' && currentZoom <= 15) return false;
+
+                // Implementação Requisito 2: Reportes normais somem no zoom 18
+                if (report.type !== 'Radar' && currentZoom <= 18) return false;
 
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
                 let isWithinRange = distToUser <= 2000;
@@ -832,7 +841,13 @@
                 const isPulsing = distToUser <= 250;
                 const pulsingHtml = isPulsing ? '<div class="pulsing-effect"></div>' : '';
 
-                if (markerIconUrl.startsWith('http')) {
+                // Implementação Requisito 2: Reportes normais pequenos (bolinha única) no zoom 9
+                const isNormalReport = data.type !== 'Radar';
+                const isMiniMode = isNormalReport && currentZoom === 9;
+
+                if (isMiniMode) {
+                    iconHtml = `<div style="width:10px; height:10px; background:${markerColor}; border-radius:50%; border:1px solid white;">${pulsingHtml}</div>`;
+                } else if (markerIconUrl.startsWith('http')) {
                     iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:30px; height:30px;">${pulsingHtml}</div>`;
                 } else {
                     iconHtml = `<div class="report-marker" style="background:${markerColor}">${pulsingHtml}<i data-lucide="${markerIconUrl}" color="white" size="12"></i></div>`;
@@ -841,8 +856,8 @@
                 const markerIcon = L.divIcon({
                     className: 'custom-div-icon',
                     html: iconHtml,
-                    iconSize: [26, 26],
-                    iconAnchor: [13, 13]
+                    iconSize: isMiniMode ? [10, 10] : [26, 26],
+                    iconAnchor: isMiniMode ? [5, 5] : [13, 13]
                 });
                 
                 const marker = L.marker([data.lat, data.lng], { icon: markerIcon });
@@ -1280,6 +1295,12 @@
                 maxZoom: 20
             }).setView(userPos, 19);
 
+            // Listener para zoom (Implementação Requisito 3)
+            map.on('zoomend', () => {
+                renderFilteredReports();
+                fetchAlerts();
+            });
+
             tileLayer = L.tileLayer('', {
                 maxZoom: 20,
                 noWrap: true
@@ -1353,6 +1374,14 @@
 
         async function fetchAlerts() {
             if (!userPos) return;
+
+            // Requisito 1: Radares do Photon desaparecem ao 15 zoom
+            const currentZoom = map.getZoom();
+            if (currentZoom <= 15) {
+                alertLayer.clearLayers();
+                return;
+            }
+
             const url = `https://photon.komoot.io/api/?lat=${userPos[0]}&lon=${userPos[1]}&limit=50&radius=1.5&q=speed_camera,construction`;
             try {
                 const res = await fetch(url);
@@ -1378,6 +1407,9 @@
                         const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [20, 20] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction' && config.reports['Obras'].show) {
+                        // Requisito 2: Construções/Obras (reportes normais) desaparecem no zoom 11
+                        if (currentZoom <= 11) return;
+
                         L.circle(coords, { radius: 30, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
