@@ -77,7 +77,6 @@
             overflow: hidden; touch-action: none;
         }
 
-        /* Requisito 6: Ajuste de escala agressivo e perspectiva para preencher vazios do 3D */
         #viewport { 
             width: 100vw; 
             height: 100vh; 
@@ -87,7 +86,6 @@
             position: relative; 
         }
         
-        /* Requisito 6: Scale 2.5 e ajuste de margem negativa para cobrir as bordas em inclinação máxima */
         #map { 
             height: 140%; 
             width: 140%; 
@@ -129,9 +127,20 @@
         }
         .btn-stop { background: #ff453a; color: white; }
 
-        .marker-blue { width: 14px; height: 14px; background: var(--accent); border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px var(--accent); }
+        /* Requisito 1: Tamanho máximo absoluto para elementos visuais */
+        .marker-blue { 
+            width: 14px; height: 14px; 
+            max-width: 14px; max-height: 14px;
+            background: var(--accent); border: 2px solid white; border-radius: 50%; 
+            box-shadow: 0 0 10px var(--accent); 
+        }
         
-        .radar-dot { width: 22px; height: 22px; border: 3px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        .radar-dot { 
+            width: 22px; height: 22px; 
+            max-width: 22px; max-height: 22px;
+            border: 3px solid white; border-radius: 50%; cursor: pointer; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); 
+        }
         .radar-speed { background: #ff453a; }
         .radar-traffic { background: #facc15; }
         .radar-bus { background: #3b82f6; }
@@ -177,9 +186,9 @@
         }
         .mode-btn.active { background: #A855F7; color: white; }
 
-        /* Correção Requisito 1: Seta diminuída e transição suave */
         .arrow-wrapper {
             width: 28px; height: 28px;
+            max-width: 28px; max-height: 28px;
             background: #A855F7; border: 2px solid white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
@@ -225,7 +234,32 @@
         .spinner { width: 40px; height: 40px; border: 4px solid #A855F7; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .report-marker { width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; overflow: hidden; background-size: cover; background-position: center; }
+        /* Requisito 1: Trava de tamanho para ícones de reporte */
+        .report-marker { 
+            width: 30px; height: 30px; 
+            max-width: 30px; max-height: 30px;
+            border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); 
+            display: flex; align-items: center; justify-content: center; overflow: hidden; 
+            background-size: cover; background-position: center; 
+            position: relative;
+        }
+
+        /* Requisito 4: Animação de Pulsação */
+        .pulsing-effect {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse-out 1.5s infinite ease-out;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        @keyframes pulse-out {
+            0% { transform: scale(0.5); opacity: 0.8; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
 
         .config-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .config-select { background: #27272a; border-radius: 10px; padding: 8px; color: white; border: 1px solid #3f3f46; font-size: 14px; }
@@ -787,14 +821,21 @@
             });
 
             visibleReports.forEach(data => {
+                const distToUser = getDistance(userPos, [data.lat, data.lng]);
+                
                 const markerColor = getReportColor(data.type, data.subtype);
                 const markerIconUrl = getReportIcon(data.type, data.subtype, true);
                 
                 let iconHtml = '';
+                
+                // Requisito 4: Adiciona efeito de pulsação se estiver a 250m ou menos
+                const isPulsing = distToUser <= 250;
+                const pulsingHtml = isPulsing ? '<div class="pulsing-effect"></div>' : '';
+
                 if (markerIconUrl.startsWith('http')) {
-                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:30px; height:30px;"></div>`;
+                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:30px; height:30px;">${pulsingHtml}</div>`;
                 } else {
-                    iconHtml = `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${markerIconUrl}" color="white" size="12"></i></div>`;
+                    iconHtml = `<div class="report-marker" style="background:${markerColor}">${pulsingHtml}<i data-lucide="${markerIconUrl}" color="white" size="12"></i></div>`;
                 }
 
                 const markerIcon = L.divIcon({
@@ -939,16 +980,21 @@
             }
 
             let foundNearby = null;
-            let minDist = 801;
+            let minDist = 501; // Requisito 3: Disparo em exatamente 500m ou menos
 
             reportCache.forEach(report => {
                 const reportCfg = config.reports[report.type] || { alert: true };
                 if (!reportCfg.alert) return;
 
                 const d = getDistance(coords, [report.lat, report.lng]);
-                if (d < minDist) {
-                    minDist = d;
-                    foundNearby = report;
+                
+                // Requisito 3: Filtro de 500m e verificação de proximidade ao caminho
+                if (d <= 500) {
+                    const isRelevant = checkReportRelevance(report);
+                    if (isRelevant && d < minDist) {
+                        minDist = d;
+                        foundNearby = report;
+                    }
                 }
             });
 
@@ -961,6 +1007,19 @@
                     closeProximityAlert();
                 }
             }
+        }
+
+        // Requisito 3: Validação de pertinência à rota ou proximidade imediata
+        function checkReportRelevance(report) {
+            if (!routingControl || !routingControl._selectedRoute) return true;
+            const coords = routingControl._selectedRoute.coordinates;
+            
+            // Verifica se o reporte está a menos de 40m de qualquer ponto do traçado
+            for (let i = 0; i < coords.length; i++) {
+                const d = getDistance([report.lat, report.lng], [coords[i].lat, coords[i].lng]);
+                if (d < 40) return true;
+            }
+            return false;
         }
 
         function updateProximityAlertUI(report, dist) {
@@ -1203,11 +1262,14 @@
             userPos = [lat, lng];
             if (map) return; 
 
+            // Requisito 2: Limite de Zoom Máximo Afastado (minZoom: 16)
             map = L.map('map', { 
                 zoomControl: false, 
                 attributionControl: false, 
                 touchRotate: true,
-                inertia: false
+                inertia: false,
+                minZoom: 13,
+                maxZoom: 20
             }).setView(userPos, 19);
 
             tileLayer = L.tileLayer('', {
@@ -1359,9 +1421,6 @@
             if (destinationLatLng) setDest(destinationLatLng);
         }
 
-        /* Correção Lógica de Rotação (Requisito 1): 
-           Alinhamento dinâmico com o vetor da rua utilizando os dados da Routing Machine.
-        */
         function animate(target) {
             if (!userPos) { userPos = target; return; }
             const start = userPos;
@@ -1377,38 +1436,31 @@
                 let dynamicRotation = rotation;
                 let finalCoords = [currentLat, currentLng];
 
-                // Lógica de Alinhamento com o Caminho (Path Alignment)
                 if (isNavigating && routingControl && routingControl._selectedRoute) {
                     const coords = routingControl._selectedRoute.coordinates;
                     let closestIdx = 0;
                     let minDist = Infinity;
 
-                    // Busca o ponto do caminho mais próximo do usuário para snap e cálculo de rotação
                     for (let i = 0; i < coords.length; i++) {
                         let d = getDistance([currentLat, currentLng], [coords[i].lat, coords[i].lng]);
                         if (d < minDist) { minDist = d; closestIdx = i; }
                     }
 
-                    // Se estiver perto da rua (snap virtual de 25m), calcula ângulo do segmento
                     if (minDist < 25) {
                         finalCoords = [coords[closestIdx].lat, coords[closestIdx].lng];
                         
-                        // Vetor de direção baseada nos próximos pontos da rota
                         const nextIdx = Math.min(closestIdx + 3, coords.length - 1);
                         if (nextIdx !== closestIdx) {
                             const p1 = coords[closestIdx];
                             const p2 = coords[nextIdx];
-                            // Calcula ângulo absoluto e converte para bússola
                             let angle = Math.atan2(p2.lng - p1.lng, p2.lat - p1.lat) * 180 / Math.PI;
                             dynamicRotation = angle; 
                         }
                     } else if (prevPos) {
-                        // Fora da rota, usa o vetor de deslocamento real do GPS
                         let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
                         dynamicRotation = 90 - angle;
                     }
                 } else if (prevPos) {
-                    // Modo livre (sem navegação)
                     const dMove = getDistance(target, start);
                     if (dMove > 0.05) { 
                         let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
@@ -1416,7 +1468,6 @@
                     }
                 }
 
-                // Normalização e suavização da rotação (Lerp de ângulo)
                 let diff = (dynamicRotation - rotation + 180) % 360 - 180;
                 rotation += diff * 0.4; 
 
@@ -1437,7 +1488,6 @@
             if (!userMarker) userMarker = L.marker(coords, { icon: L.divIcon({ className: '', html: '<div id="marker-inner"></div>', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map);
             const inner = document.getElementById('marker-inner');
             
-            // Implementação Requerida: Seta e Bolinha menores e consistentes
             inner.innerHTML = asArrow ? 
                 `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="14" height="14" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
                 `<div class="marker-blue mx-auto mt-[13px]"></div>`;
@@ -1458,7 +1508,7 @@
             let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
             const origin = forcedOrigin || L.latLng(userPos);
 
-            // Requisito 1: Estilo de linha mais fino e elegante (weight reduzido)
+            // Requisito 1: Estilo de linha mais fino (weight: 3)
             routingControl = L.Routing.control({
                 waypoints: [origin, latlng],
                 router: L.Routing.osrmv1({ 
@@ -1467,8 +1517,8 @@
                 }),
                 lineOptions: { 
                     styles: [
-                        { color: 'white', opacity: 0.8, weight: 8 }, 
-                        { color: getPathColor(), opacity: 1, weight: 5 }
+                        { color: 'white', opacity: 0.8, weight: 6 }, 
+                        { color: getPathColor(), opacity: 1, weight: 3 }
                     ] 
                 },
                 createMarker: () => null, 
