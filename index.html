@@ -77,17 +77,28 @@
             overflow: hidden; touch-action: none;
         }
 
-        /* Requisito 5: Perspectiva aumentada e overflow controlado para preenchimento total */
-        #viewport { width: 100%; height: 100%; perspective: 1500px; overflow: hidden; background: #000; position: relative; }
+        /* Requisito 6: Ajuste de escala agressivo e perspectiva para preencher vazios do 3D */
+        #viewport { 
+            width: 100vw; 
+            height: 100vh; 
+            perspective: 1500px; 
+            overflow: hidden; 
+            background: #000; 
+            position: relative; 
+        }
         
-        /* Requisito 5: Scale aumentado para garantir que as bordas nunca apareçam durante rotação ou inclinação */
+        /* Requisito 6: Scale 2.5 e ajuste de margem negativa para cobrir as bordas em inclinação máxima */
         #map { 
-            height: 100%; width: 100%; z-index: 1; 
+            height: 140%; 
+            width: 140%; 
+            position: absolute;
+            top: -20%;
+            left: -20%;
+            z-index: 1; 
             transition: transform 0.1s linear; 
-            transform: scale(1.5); 
+            transform: scale(2.5); 
         }
 
-        /* Requisito 4: Inclinação baseada em classe (será manipulada via JS para ser progressiva) */
         .map-3d-active { transform-origin: center center; }
 
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
@@ -118,7 +129,7 @@
         }
         .btn-stop { background: #ff453a; color: white; }
 
-        .marker-blue { width: 18px; height: 18px; background: var(--accent); border: 3px solid white; border-radius: 50%; box-shadow: 0 0 15px var(--accent); }
+        .marker-blue { width: 14px; height: 14px; background: var(--accent); border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px var(--accent); }
         
         .radar-dot { width: 22px; height: 22px; border: 3px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .radar-speed { background: #ff453a; }
@@ -166,13 +177,13 @@
         }
         .mode-btn.active { background: #A855F7; color: white; }
 
-        /* Requisito 3: Transição suave implementada via CSS transition e JS */
+        /* Correção Requisito 1: Seta diminuída e transição suave */
         .arrow-wrapper {
-            width: 36px; height: 36px;
-            background: #A855F7; border: 3px solid white; border-radius: 50%;
+            width: 28px; height: 28px;
+            background: #A855F7; border: 2px solid white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
-            transition: transform 0.3s cubic-bezier(0.1, 0, 0.3, 1);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+            transition: transform 0.1s linear; 
         }
 
         #settings-btn {
@@ -610,7 +621,6 @@
         let jaVotouNesse = new Set(); 
         let alertasMostradosNestaViagem = new Set();
 
-        // Requisito 2: Temporizador de inatividade
         let focusTimer = null;
         let isFocusedMode = false;
 
@@ -724,7 +734,7 @@
             if (!routingControl || !routingControl._selectedRoute) return;
             const coords = routingControl._selectedRoute.coordinates;
             if (slowTrafficPolyline) map.removeLayer(slowTrafficPolyline);
-            slowTrafficPolyline = L.polyline(coords, { color: 'red', weight: 6, opacity: 0.9 }).addTo(map);
+            slowTrafficPolyline = L.polyline(coords, { color: 'red', weight: 4, opacity: 0.9 }).addTo(map);
             
             setTimeout(() => { if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; } }, 30000);
         }
@@ -782,16 +792,16 @@
                 
                 let iconHtml = '';
                 if (markerIconUrl.startsWith('http')) {
-                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:34px; height:34px;"></div>`;
+                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:30px; height:30px;"></div>`;
                 } else {
-                    iconHtml = `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${markerIconUrl}" color="white" size="14"></i></div>`;
+                    iconHtml = `<div class="report-marker" style="background:${markerColor}"><i data-lucide="${markerIconUrl}" color="white" size="12"></i></div>`;
                 }
 
                 const markerIcon = L.divIcon({
                     className: 'custom-div-icon',
                     html: iconHtml,
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13]
                 });
                 
                 const marker = L.marker([data.lat, data.lng], { icon: markerIcon });
@@ -981,7 +991,7 @@
                     iconContainer.innerHTML = '';
                 } else {
                     iconContainer.style.backgroundImage = 'none';
-                    iconContainer.innerHTML = `<i data-lucide="${iconRef}" color="white" size="28"></i>`;
+                    iconContainer.innerHTML = `<i data-lucide="${iconRef}" color="white" size="24"></i>`;
                 }
                 lucide.createIcons();
             }
@@ -1119,7 +1129,6 @@
             if (!show) backToSettingsMain();
         }
 
-        // Requisito 1: Migração total para OpenStreetMap e atualização instantânea
         function applyTheme() {
             if (!tileLayer) return;
             let mode = config.theme;
@@ -1128,32 +1137,28 @@
                 const minutes = now.getHours() * 60 + now.getMinutes();
                 mode = (minutes >= 1111 || minutes <= 389) ? 'dark' : 'light';
             }
-            // Tiles de OpenStreetMap via Carto (sem cooldown)
             const url = mode === 'dark' ? 
                 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 
                 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
             tileLayer.setUrl(url);
         }
 
-        // Requisito 4: Inclinação progressiva baseada em velocidade
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
             if (!isNavigating) {
-                mapEl.style.transform = `scale(1.5) rotateX(0deg)`;
+                mapEl.style.transform = `scale(2.5) rotateX(0deg)`;
                 return;
             }
 
-            // Cálculo progressivo de inclinação (Máximo 65 graus a 120km/h)
             let pitch = Math.min(currentSpeed * 0.54, 65);
             let translateY = Math.min(currentSpeed * 0.2, 25);
             
-            // Requisito 2: Se estiver focado, rotacionamos o mapa para bater com a bússola
             let mapRotation = isFocusedMode ? -rotation : 0;
 
             if (userInteracting) {
-                mapEl.style.transform = `scale(1.5) rotateX(0deg) rotateZ(0deg)`;
+                mapEl.style.transform = `scale(2.5) rotateX(0deg) rotateZ(0deg)`;
             } else {
-                mapEl.style.transform = `scale(1.8) translateY(-${translateY}%) rotateX(${pitch}deg) rotateZ(${mapRotation}deg)`;
+                mapEl.style.transform = `scale(2.8) translateY(-${translateY}%) rotateX(${pitch}deg) rotateZ(${mapRotation}deg)`;
             }
         }
 
@@ -1202,7 +1207,7 @@
                 zoomControl: false, 
                 attributionControl: false, 
                 touchRotate: true,
-                inertia: false // Requisito 1: Remoção de delay no mapa
+                inertia: false
             }).setView(userPos, 19);
 
             tileLayer = L.tileLayer('', {
@@ -1224,7 +1229,6 @@
                 }
             }, 500);
 
-            // Requisito 2: Reset de timer de foco
             const resetFocusTimer = () => {
                 userInteracting = true;
                 isFocusedMode = false;
@@ -1246,7 +1250,6 @@
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
                 
-                // Requisito 1: Atualização instantânea sem cooldown
                 if (!lastApiPos || getDistance(coords, lastApiPos) > 10) {
                     fetchAlerts();
                     lastApiPos = coords;
@@ -1257,7 +1260,6 @@
                 
                 if (isNavigating) {
                     updateNavigation();
-                    // Requisito 2: Foco contínuo se inativo
                     if(isFocusedMode && !userInteracting) {
                         map.setView(userPos, map.getZoom(), { animate: false });
                         updateVisionMode();
@@ -1303,10 +1305,10 @@
                             iconHtml = `<div class="radar-dot ${rInfo.class}"></div>`;
                         }
 
-                        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [22, 22] });
+                        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [20, 20] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction' && config.reports['Obras'].show) {
-                        L.circle(coords, { radius: 40, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
+                        L.circle(coords, { radius: 30, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
             } catch(e) {}
@@ -1357,26 +1359,70 @@
             if (destinationLatLng) setDest(destinationLatLng);
         }
 
-        // Requisito 3: Animação de rotação suave da seta
+        /* Correção Lógica de Rotação (Requisito 1): 
+           Alinhamento dinâmico com o vetor da rua utilizando os dados da Routing Machine.
+        */
         function animate(target) {
             if (!userPos) { userPos = target; return; }
             const start = userPos;
             const startTime = performance.now();
+            const duration = 300; 
+            
             function frame(now) {
-                const p = Math.min((now - startTime) / 300, 1); // Animação rápida de 300ms
-                userPos = [start[0] + (target[0]-start[0])*p, start[1] + (target[1]-start[1])*p];
+                const p = Math.min((now - startTime) / duration, 1);
                 
-                // Cálculo de rotação baseado no movimento
-                if (prevPos && getDistance(target, start) > 0.05) {
-                    let newRot = 90 - (Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI);
-                    // Suavização manual do ângulo (lerp angular) para evitar giros de 360
-                    let diff = (newRot - rotation + 180) % 360 - 180;
-                    rotation += diff * 0.2;
+                let currentLat = start[0] + (target[0] - start[0]) * p;
+                let currentLng = start[1] + (target[1] - start[1]) * p;
+                
+                let dynamicRotation = rotation;
+                let finalCoords = [currentLat, currentLng];
+
+                // Lógica de Alinhamento com o Caminho (Path Alignment)
+                if (isNavigating && routingControl && routingControl._selectedRoute) {
+                    const coords = routingControl._selectedRoute.coordinates;
+                    let closestIdx = 0;
+                    let minDist = Infinity;
+
+                    // Busca o ponto do caminho mais próximo do usuário para snap e cálculo de rotação
+                    for (let i = 0; i < coords.length; i++) {
+                        let d = getDistance([currentLat, currentLng], [coords[i].lat, coords[i].lng]);
+                        if (d < minDist) { minDist = d; closestIdx = i; }
+                    }
+
+                    // Se estiver perto da rua (snap virtual de 25m), calcula ângulo do segmento
+                    if (minDist < 25) {
+                        finalCoords = [coords[closestIdx].lat, coords[closestIdx].lng];
+                        
+                        // Vetor de direção baseada nos próximos pontos da rota
+                        const nextIdx = Math.min(closestIdx + 3, coords.length - 1);
+                        if (nextIdx !== closestIdx) {
+                            const p1 = coords[closestIdx];
+                            const p2 = coords[nextIdx];
+                            // Calcula ângulo absoluto e converte para bússola
+                            let angle = Math.atan2(p2.lng - p1.lng, p2.lat - p1.lat) * 180 / Math.PI;
+                            dynamicRotation = angle; 
+                        }
+                    } else if (prevPos) {
+                        // Fora da rota, usa o vetor de deslocamento real do GPS
+                        let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
+                        dynamicRotation = 90 - angle;
+                    }
+                } else if (prevPos) {
+                    // Modo livre (sem navegação)
+                    const dMove = getDistance(target, start);
+                    if (dMove > 0.05) { 
+                        let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
+                        dynamicRotation = 90 - angle;
+                    }
                 }
-                
+
+                // Normalização e suavização da rotação (Lerp de ângulo)
+                let diff = (dynamicRotation - rotation + 180) % 360 - 180;
+                rotation += diff * 0.4; 
+
+                userPos = finalCoords;
                 updateUserMarker(userPos, rotation, isNavigating);
                 
-                // Requisito 2: Foco contínuo se inativo
                 if (isNavigating && !userInteracting && isFocusedMode) {
                     map.setView(userPos, map.getZoom(), { animate: false });
                     updateVisionMode();
@@ -1391,17 +1437,17 @@
             if (!userMarker) userMarker = L.marker(coords, { icon: L.divIcon({ className: '', html: '<div id="marker-inner"></div>', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map);
             const inner = document.getElementById('marker-inner');
             
-            // Requisito 3: Seta com transição CSS integrada
+            // Implementação Requerida: Seta e Bolinha menores e consistentes
             inner.innerHTML = asArrow ? 
-                `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="20" height="20" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
-                `<div class="marker-blue mx-auto mt-[11px]"></div>`;
+                `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="14" height="14" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
+                `<div class="marker-blue mx-auto mt-[13px]"></div>`;
             userMarker.setLatLng(coords);
         }
 
         async function setDest(latlng, forcedOrigin = null) {
             if (destMarker) map.removeLayer(destMarker);
             destinationLatLng = latlng;
-            destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
+            destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
             
             document.getElementById('trip-card').classList.add('active');
             document.getElementById('speed-ui').classList.add('ui-lift-active');
@@ -1412,6 +1458,7 @@
             let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
             const origin = forcedOrigin || L.latLng(userPos);
 
+            // Requisito 1: Estilo de linha mais fino e elegante (weight reduzido)
             routingControl = L.Routing.control({
                 waypoints: [origin, latlng],
                 router: L.Routing.osrmv1({ 
@@ -1420,8 +1467,8 @@
                 }),
                 lineOptions: { 
                     styles: [
-                        { color: 'white', opacity: 0.8, weight: 12 }, 
-                        { color: getPathColor(), opacity: 1, weight: 8 }
+                        { color: 'white', opacity: 0.8, weight: 8 }, 
+                        { color: getPathColor(), opacity: 1, weight: 5 }
                     ] 
                 },
                 createMarker: () => null, 
@@ -1479,7 +1526,7 @@
             if(start) {
                 alertasMostradosNestaViagem.clear();
                 userInteracting = false; 
-                isFocusedMode = true; // Inicia focado
+                isFocusedMode = true;
                 map.setZoom(19); 
                 updateVisionMode();
                 setDest(destinationLatLng); 
