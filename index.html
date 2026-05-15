@@ -980,7 +980,7 @@
             }
 
             let foundNearby = null;
-            let minDist = 501; // Requisito 3: Disparo em exatamente 500m ou menos
+            let minDist = 501;
 
             reportCache.forEach(report => {
                 const reportCfg = config.reports[report.type] || { alert: true };
@@ -988,8 +988,8 @@
 
                 const d = getDistance(coords, [report.lat, report.lng]);
                 
-                // Requisito 3: Filtro de 500m e verificação de proximidade ao caminho
                 if (d <= 500) {
+                    // Valida se o reporte está no caminho ou na rua atual
                     const isRelevant = checkReportRelevance(report);
                     if (isRelevant && d < minDist) {
                         minDist = d;
@@ -1003,22 +1003,31 @@
                     updateProximityAlertUI(foundNearby, minDist);
                 }
             } else {
+                // Se o reporte sumiu do radar ou não é mais relevante, fecha imediatamente
                 if (activeAlertaReportId && !alertaPassou) {
                     closeProximityAlert();
                 }
             }
         }
 
-        // Requisito 3: Validação de pertinência à rota ou proximidade imediata
+        // Nova função para garantir que o reporte só apareça se estiver no caminho
         function checkReportRelevance(report) {
-            if (!routingControl || !routingControl._selectedRoute) return true;
-            const coords = routingControl._selectedRoute.coordinates;
-            
-            // Verifica se o reporte está a menos de 40m de qualquer ponto do traçado
-            for (let i = 0; i < coords.length; i++) {
-                const d = getDistance([report.lat, report.lng], [coords[i].lat, coords[i].lng]);
-                if (d < 40) return true;
+            // Se não houver rota, assumimos proximidade radial curta (ex: 40m) como "estar na rua"
+            if (!routingControl || !routingControl._selectedRoute) {
+                return getDistance(userPos, [report.lat, report.lng]) < 40;
             }
+
+            const pathCoords = routingControl._selectedRoute.coordinates;
+            
+            // Verifica se o reporte está a menos de 35 metros de qualquer ponto da rota planejada
+            for (let i = 0; i < pathCoords.length; i++) {
+                const d = getDistance([report.lat, report.lng], [pathCoords[i].lat, pathCoords[i].lng]);
+                if (d < 35) return true;
+            }
+            
+            // Adicionalmente verifica se está extremamente perto do usuário atual (mesma rua)
+            if (getDistance(userPos, [report.lat, report.lng]) < 30) return true;
+
             return false;
         }
 
@@ -1262,7 +1271,6 @@
             userPos = [lat, lng];
             if (map) return; 
 
-            // Requisito 2: Limite de Zoom Máximo Afastado (minZoom: 16)
             map = L.map('map', { 
                 zoomControl: false, 
                 attributionControl: false, 
@@ -1508,7 +1516,6 @@
             let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
             const origin = forcedOrigin || L.latLng(userPos);
 
-            // Requisito 1: Estilo de linha mais fino (weight: 3)
             routingControl = L.Routing.control({
                 waypoints: [origin, latlng],
                 router: L.Routing.osrmv1({ 
