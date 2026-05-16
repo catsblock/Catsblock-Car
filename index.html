@@ -77,6 +77,10 @@
             overflow: hidden; touch-action: none;
         }
 
+        .apple-tiles { transition: filter 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        body.theme-light .apple-tiles { filter: contrast(1.02) saturate(1.1) brightness(1.05) sepia(0.05); }
+        body.theme-dark .apple-tiles { filter: brightness(0.9) contrast(1.15) sepia(0.25) hue-rotate(200deg) saturate(0.85); }
+
         #viewport { 
             width: 100vw; 
             height: 100vh; 
@@ -87,14 +91,13 @@
         }
         
         #map { 
-            height: 140%; 
-            width: 140%; 
+            height: 200%; 
+            width: 200%; 
             position: absolute;
-            top: -20%;
-            left: -20%;
+            top: -50%;
+            left: -50%;
             z-index: 1; 
-            transition: transform 0.1s linear; 
-            transform: scale(2.5); 
+            transition: transform 0.3s ease-out; 
         }
 
         .map-3d-active { transform-origin: center center; }
@@ -116,7 +119,8 @@
             display: none; align-items: center; gap: 15px;
             background: var(--accent); color: white; padding: 20px;
             border-radius: 24px; margin-bottom: 12px;
-            box-shadow: 0 10px 30px rgba(168, 85, 247, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: background 0.3s;
         }
 
         .btn-action {
@@ -127,15 +131,14 @@
         }
         .btn-stop { background: #ff453a; color: white; }
 
-        /* Requisito 1 & 4: Tamanho ajustado para bolinha roxa (user marker) */
         .marker-blue { 
-            width: 10px; height: 10px; 
-            max-width: 10px; max-height: 10px;
-            background: var(--accent); border: 2px solid white; border-radius: 50%; 
+            width: 8px; height: 8px; 
+            max-width: 8px; max-height: 8px;
+            background: var(--accent); border: 1.5px solid white; border-radius: 50%; 
             box-shadow: 0 0 10px var(--accent); 
+            transition: background 0.3s, box-shadow 0.3s;
         }
         
-        /* Requisito 4: Radares um pouco menores */
         .radar-dot { 
             width: 18px; height: 18px; 
             max-width: 18px; max-height: 18px;
@@ -159,8 +162,8 @@
             position: absolute; right: 20px; bottom: 25px;
             background: var(--accent); color: white;
             padding: 15px; border-radius: 20px; z-index: 1000;
-            transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 10px 20px rgba(168, 85, 247, 0.4);
+            transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
         }
 
         .leaflet-routing-container, .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
@@ -185,16 +188,23 @@
             background: rgba(255,255,255,0.05); padding: 10px; border-radius: 14px; 
             transition: all 0.2s; color: #71717a; border: 1px solid transparent;
         }
-        .mode-btn.active { background: #A855F7; color: white; }
+        .mode-btn.active { background: var(--accent); color: white; }
 
-        /* Requisito 4: Seta um pouco menor */
         .arrow-wrapper {
-            width: 22px; height: 22px;
-            max-width: 22px; max-height: 22px;
-            background: #A855F7; border: 2px solid white; border-radius: 50%;
+            width: 24px; height: 24px;
+            max-width: 24px; max-height: 24px;
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+            border: 1.5px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
-            transition: transform 0.1s linear; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .nav-arrow-svg {
+            width: 14px; height: 14px;
+            fill: var(--accent);
+            filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
         }
 
         #settings-btn {
@@ -233,10 +243,9 @@
         .report-option:active { transform: scale(0.95); background: var(--accent); }
 
         #loader { display: none; position: fixed; inset: 0; background: black; z-index: 7000; flex-direction: column; align-items: center; justify-content: center; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #A855F7; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        .spinner { width: 40px; height: 40px; border: 4px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; transition: border-color 0.3s; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Requisito 4: Ícones de reporte reduzidos de 30px para 22px */
         .report-marker { 
             width: 22px; height: 22px; 
             max-width: 22px; max-height: 22px;
@@ -255,6 +264,7 @@
             animation: pulse-out 1.5s infinite ease-out;
             pointer-events: none;
             z-index: -1;
+            transition: background 0.3s;
         }
 
         @keyframes pulse-out {
@@ -324,6 +334,7 @@
             font-size: 12px;
             margin-bottom: 25px;
             cursor: pointer;
+            transition: color 0.3s;
         }
 
         .report-config-card {
@@ -364,7 +375,7 @@
 
     </style>
 </head>
-<body>
+<body class="theme-light">
 
     <div id="loader">
         <div class="spinner mb-4"></div>
@@ -373,7 +384,7 @@
 
     <div id="login-screen">
         <div class="login-card">
-            <div class="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <div class="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6" style="background-color: var(--accent); transition: background 0.3s;">
                 <i data-lucide="log-in" color="white" size="32"></i>
             </div>
             <h2 class="text-xl font-black mb-4">Faça login pra Reportar Acidentes, radares, obras e muito mais.</h2>
@@ -412,7 +423,7 @@
     </div>
 
     <div id="splash">
-        <div class="mb-6 w-20 h-20 bg-purple-600 rounded-[25px] flex items-center justify-center">
+        <div class="mb-6 w-20 h-20 rounded-[25px] flex items-center justify-center" style="background-color: var(--accent); transition: background 0.3s;">
             <i data-lucide="shield-check" size="40" color="white"></i>
         </div>
         <h1 class="text-3xl font-black mb-4 text-white tracking-tight">CatsBlock Car</h1>
@@ -445,12 +456,12 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 overflow-hidden bg-cover bg-center"></div>
             <h2 id="alert-title" class="text-2xl font-black mb-2">Título</h2>
-            <p id="alert-type" class="text-purple-500 font-bold text-xs uppercase tracking-widest mb-4">Tipo do Alerta</p>
+            <p id="alert-type" class="text-purple-500 font-bold text-xs uppercase tracking-widest mb-4" style="color: var(--accent);">Tipo do Alerta</p>
             <div class="bg-white/5 p-4 rounded-2xl mb-6">
                 <p id="alert-desc-text" class="text-zinc-400 text-sm leading-relaxed"></p>
                 <div id="radar-lesson" class="mt-4 pt-4 border-t border-white/5 hidden">
                     <p class="text-white font-bold text-xs mb-2">O que isso faz na sua vida?</p>
-                    <p id="lesson-text" class="text-purple-300 text-xs italic"></p>
+                    <p id="lesson-text" class="text-xs italic" style="color: var(--accent); opacity: 0.8;"></p>
                 </div>
                 <div id="report-meta" class="mt-4 pt-4 border-t border-white/5 hidden">
                    <p class="text-[9px] text-zinc-600 uppercase font-black mb-1">ID do Criador</p>
@@ -495,6 +506,14 @@
                 </div>
                 <i data-lucide="chevron-right" size="18"></i>
             </div>
+            <div class="settings-menu-item" onclick="openSettingCategory('cores')">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="palette" size="20"></i>
+                    <span class="font-bold">Cores</span>
+                </div>
+                <i data-lucide="chevron-right" size="18"></i>
+            </div>
+
             <p class="text-[9px] text-zinc-600 font-black uppercase tracking-widest mt-10 text-center">Preferências salvas localmente</p>
         </div>
 
@@ -544,6 +563,20 @@
             <div id="report-config-container" class="max-h-[60vh] overflow-y-auto pr-2">
             </div>
         </div>
+
+        <div id="list-cores" class="settings-list">
+            <div class="back-btn" onclick="backToSettingsMain()"><i data-lucide="arrow-left" size="16"></i> Menu Principal</div>
+            <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Identidade Visual</h3>
+            
+            <p class="text-[10px] text-zinc-500 mb-4 font-bold uppercase">Selecione a cor de destaque</p>
+            <div class="flex gap-4 mb-6">
+                <div onclick="setAppColor('purple')" id="color-purple" class="w-10 h-10 rounded-full bg-[#A855F7] border-2 border-transparent cursor-pointer transition-all hover:scale-110"></div>
+                <div onclick="setAppColor('blue')" id="color-blue" class="w-10 h-10 rounded-full bg-[#3b82f6] border-2 border-transparent cursor-pointer transition-all hover:scale-110"></div>
+                <div onclick="setAppColor('green')" id="color-green" class="w-10 h-10 rounded-full bg-[#22c55e] border-2 border-transparent cursor-pointer transition-all hover:scale-110"></div>
+                <div onclick="setAppColor('gray')" id="color-gray" class="w-10 h-10 rounded-full bg-[#71717a] border-2 border-transparent cursor-pointer transition-all hover:scale-110"></div>
+                <div onclick="setAppColor('red')" id="color-red" class="w-10 h-10 rounded-full bg-[#ef4444] border-2 border-transparent cursor-pointer transition-all hover:scale-110"></div>
+            </div>
+        </div>
     </div>
 
     <div class="speed-badge" id="speed-ui">
@@ -557,7 +590,7 @@
 
     <div class="ui-container top-ui" id="ui-top">
         <div id="instruction-panel">
-            <div id="inst-icon" class="bg-white/20 p-3 rounded-2xl">
+            <div id="inst-icon" class="bg-white/20 p-3 rounded-2xl" data-current-icon="arrow-up">
                 <i data-lucide="arrow-up" size="32"></i>
             </div>
             <div>
@@ -568,7 +601,7 @@
 
         <div class="glass-card" id="search-card">
             <div class="flex items-center gap-3">
-                <i data-lucide="search" size="18" class="text-purple-500"></i>
+                <i data-lucide="search" size="18" style="color: var(--accent); transition: color 0.3s;"></i>
                 <input type="text" placeholder="Para onde vamos?" id="dest-input" class="bg-transparent border-none outline-none text-white w-full font-medium">
             </div>
             <div id="results" class="mt-3 max-h-60 overflow-y-auto hidden bg-[#0c0c0e] rounded-xl border border-white/5 shadow-2xl"></div>
@@ -585,7 +618,7 @@
                 <button onclick="clearSelection()" class="text-zinc-500 hover:text-white p-2" title="Fechar">
                     <i data-lucide="x" size="20"></i>
                 </button>
-                <button onclick="shareTrip()" class="text-zinc-500 hover:text-purple-400 p-2" title="Compartilhar">
+                <button onclick="shareTrip()" class="text-zinc-500 hover:text-white p-2" title="Compartilhar" style="transition: color 0.3s;">
                     <i data-lucide="share-2" size="20"></i>
                 </button>
             </div>
@@ -606,7 +639,7 @@
             <div id="cost-grid" class="grid grid-cols-2 gap-3 mb-4">
                 <div class="cost-badge">
                     <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Tempo Est.</p>
-                    <p id="eta-val" class="text-purple-500 font-black text-lg">--</p>
+                    <p id="eta-val" class="font-black text-lg" style="color: var(--accent); transition: color 0.3s;">--</p>
                 </div>
                 <div class="cost-badge" id="extra-info-box">
                     <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1" id="extra-info-label">Combustível</p>
@@ -640,6 +673,7 @@
             theme: 'auto', 
             vision: 'auto', 
             pathAlgo: 'fast', 
+            uiColor: 'purple',
             reports: {
                 'Polícia': { alert: true, show: true },
                 'Obras': { alert: true, show: true },
@@ -667,6 +701,20 @@
             traffic_light: { title: "Radar de Semáforo", desc: "Captura avanço de sinal vermelho.", lesson: "Protege sua vida de colisões laterais.", type: "TRÂNSITO", icon: "traffic-light", class: "radar-traffic", externalIcon: RADAR_TRANSITO_IMG },
             bus_lane: { title: "Fiscalização de Faixa", desc: "Monitora o uso exclusivo de faixas de ônibus.", lesson: "Deixar a faixa livre melhora o fluxo da cidade.", type: "ÔNIBUS", icon: "bus", class: "radar-bus" }
         };
+
+        const colorMap = { purple: '#A855F7', blue: '#3b82f6', green: '#22c55e', gray: '#71717a', red: '#ef4444' };
+        
+        function setAppColor(color) {
+            config.uiColor = color;
+            document.documentElement.style.setProperty('--accent', colorMap[color]);
+            document.querySelectorAll('[id^="color-"]').forEach(el => el.style.borderColor = 'transparent');
+            document.getElementById('color-' + color).style.borderColor = 'white';
+            saveConfig();
+            
+            if(userPos && map) {
+                 updateUserMarker(userPos, rotation, isNavigating);
+            }
+        }
 
         function initiateReport() {
             if (window.currentAuthUser) {
@@ -816,7 +864,6 @@
                 const reportCfg = config.reports[report.type] || { show: true };
                 if (!reportCfg.show) return false;
 
-                // Requisito 3: Radares desaparecem ao zoom 16 ou menos
                 if (report.type === 'Radar' && currentZoom <= 16) return false;
 
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
@@ -834,18 +881,13 @@
                 const isPulsing = distToUser <= 250;
                 const pulsingHtml = isPulsing ? '<div class="pulsing-effect"></div>' : '';
 
-                // Requisito 1: Bolinhas de reporte ficam pequenas ao zoom 15 ou menos
-                // Requisito 2: Bolinhas normais ao zoom 16 ou maior
                 const isMiniMode = currentZoom <= 15;
 
                 if (isMiniMode) {
-                    // Requisito 1: Bolinha pequena (mini mode)
                     iconHtml = `<div style="width:8px; height:8px; background:${markerColor}; border-radius:50%; border:1.5px solid white; position:relative; box-shadow: 0 0 5px rgba(0,0,0,0.5);">${pulsingHtml}</div>`;
                 } else if (markerIconUrl.startsWith('http')) {
-                    // Requisito 2 & 4: Bolinha normal mas compacta (22px conforme style)
                     iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none;">${pulsingHtml}</div>`;
                 } else {
-                    // Requisito 2 & 4: Bolinha normal mas compacta (22px conforme style)
                     iconHtml = `<div class="report-marker" style="background:${markerColor}">${pulsingHtml}<i data-lucide="${markerIconUrl}" color="white" size="10"></i></div>`;
                 }
 
@@ -870,7 +912,7 @@
             if (type === 'Radar') {
                 if (subtype === 'Velocidade') return '#ff453a';
                 if (subtype === 'Trânsito') return '#facc15';
-                return '#A855F7';
+                return 'var(--accent)';
             }
             switch(type) {
                 case 'Polícia': return '#3b82f6';
@@ -1144,7 +1186,7 @@
                 card.className = 'report-config-card';
                 card.innerHTML = `
                     <div class="flex items-center gap-3 mb-3">
-                        <i data-lucide="${getReportIcon(type)}" class="text-purple-400" size="18"></i>
+                        <i data-lucide="${getReportIcon(type)}" style="color: var(--accent);" size="18"></i>
                         <span class="font-bold text-sm">${type}</span>
                     </div>
                     <div class="flex gap-4">
@@ -1181,6 +1223,12 @@
                 document.getElementById('cfg-vision').value = config.vision;
                 document.getElementById('cfg-path-algo').value = config.pathAlgo || 'fast';
             }
+            
+            if (config.uiColor) {
+                setAppColor(config.uiColor);
+            } else {
+                setAppColor('purple');
+            }
         }
 
         function saveConfig() {
@@ -1206,25 +1254,36 @@
                 const minutes = now.getHours() * 60 + now.getMinutes();
                 mode = (minutes >= 1111 || minutes <= 389) ? 'dark' : 'light';
             }
+            
             const url = mode === 'dark' ? 
                 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 
-                'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            
             tileLayer.setUrl(url);
+
+            if (mode === 'dark') {
+                document.body.classList.remove('theme-light');
+                document.body.classList.add('theme-dark');
+            } else {
+                document.body.classList.remove('theme-dark');
+                document.body.classList.add('theme-light');
+            }
         }
 
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
             if (!isNavigating) {
-                mapEl.style.transform = `scale(2.5) rotateX(0deg)`;
-                return;
+                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
+                return; 
             }
+            
             let pitch = Math.min(currentSpeed * 0.54, 65);
             let translateY = Math.min(currentSpeed * 0.2, 25);
-            let mapRotation = isFocusedMode ? -rotation : 0;
+            
             if (userInteracting) {
-                mapEl.style.transform = `scale(2.5) rotateX(0deg) rotateZ(0deg)`;
+                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
             } else {
-                mapEl.style.transform = `scale(2.8) translateY(-${translateY}%) rotateX(${pitch}deg) rotateZ(${mapRotation}deg)`;
+                mapEl.style.transform = `translateY(-${translateY}%) rotateX(${pitch}deg)`;
             }
         }
 
@@ -1272,8 +1331,8 @@
             map = L.map('map', { 
                 zoomControl: false, 
                 attributionControl: false, 
-                touchRotate: true,
                 inertia: false,
+                zoomAnimation: false, 
                 minZoom: 13,
                 maxZoom: 20
             }).setView(userPos, 19);
@@ -1285,12 +1344,21 @@
 
             tileLayer = L.tileLayer('', {
                 maxZoom: 20,
-                noWrap: true
+                noWrap: true,
+                className: 'apple-tiles'
             }).addTo(map);
 
             applyTheme();
             alertLayer = L.layerGroup().addTo(map);
             activeReportsLayer = L.layerGroup().addTo(map);
+
+            map.on('move zoom', () => {
+                map.eachLayer(layer => {
+                    if (layer.redraw && (layer instanceof L.Polyline || layer instanceof L.Circle)) {
+                        layer.redraw();
+                    }
+                });
+            });
             
             updateUserMarker(userPos, 0, false);
             fetchAlerts();
@@ -1307,16 +1375,26 @@
                 isFocusedMode = false;
                 updateVisionMode();
                 clearTimeout(focusTimer);
+            };
+
+            const startFocusTimer = () => {
+                clearTimeout(focusTimer);
                 focusTimer = setTimeout(() => {
                     if (isNavigating) {
                         userInteracting = false;
                         isFocusedMode = true;
+                        if(userPos && map) {
+                            const exactPos = userMarker ? userMarker.getLatLng() : userPos;
+                            map.panTo(exactPos, { animate: false });
+                        }
                         updateVisionMode();
                     }
-                }, 3000);
+                }, 3000); 
             };
 
-            map.on('movestart touchstart mousedown wheel rotate', resetFocusTimer);
+            map.on('movestart dragstart touchstart mousedown wheel zoomstart', resetFocusTimer);
+            map.on('moveend dragend touchend mouseup zoomend', startFocusTimer);
+            startFocusTimer(); 
 
             navigator.geolocation.watchPosition(pos => {
                 const coords = [pos.coords.latitude, pos.coords.longitude];
@@ -1334,7 +1412,8 @@
                 if (isNavigating) {
                     updateNavigation();
                     if(isFocusedMode && !userInteracting) {
-                        map.setView(userPos, map.getZoom(), { animate: false });
+                        const exactPos = userMarker ? userMarker.getLatLng() : userPos;
+                        map.panTo(exactPos, { animate: false });
                         updateVisionMode();
                     }
                 }
@@ -1358,7 +1437,6 @@
             if (!userPos) return;
 
             const currentZoom = map.getZoom();
-            // Requisito 3: Radares desaparecem ao zoom 16 ou menos
             if (currentZoom <= 16) {
                 alertLayer.clearLayers();
                 return;
@@ -1386,7 +1464,6 @@
                             iconHtml = `<div class="radar-dot ${rInfo.class}"></div>`;
                         }
 
-                        // Requisito 4: Ícone do radar reduzido para 18px conforme CSS .radar-dot
                         const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [18, 18], iconAnchor: [9, 9] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction' && config.reports['Obras'].show) {
@@ -1473,43 +1550,66 @@
                         }
                     } else if (prevPos) {
                         let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
-                        dynamicRotation = 90 - angle;
+                        dynamicRotation = angle; 
                     }
                 } else if (prevPos) {
                     const dMove = getDistance(target, start);
                     if (dMove > 0.05) { 
                         let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
-                        dynamicRotation = 90 - angle;
+                        dynamicRotation = angle; 
                     }
                 }
-                let diff = (dynamicRotation - rotation + 180) % 360 - 180;
+                
+                let diff = ((dynamicRotation - rotation) % 360 + 540) % 360 - 180;
                 rotation += diff * 0.4; 
                 userPos = finalCoords;
+                
                 updateUserMarker(userPos, rotation, isNavigating);
+                
                 if (isNavigating && !userInteracting && isFocusedMode) {
-                    map.setView(userPos, map.getZoom(), { animate: false });
+                    const exactPos = userMarker ? userMarker.getLatLng() : userPos;
+                    map.panTo(exactPos, { animate: false });
                     updateVisionMode();
                 }
+                
                 if (p < 1) requestAnimationFrame(frame);
             }
             requestAnimationFrame(frame);
         }
 
         function updateUserMarker(coords, rot, asArrow) {
-            if (!userMarker) userMarker = L.marker(coords, { icon: L.divIcon({ className: '', html: '<div id="marker-inner"></div>', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map);
-            const inner = document.getElementById('marker-inner');
+            if (!userMarker) {
+                userMarker = L.marker(coords, { 
+                    icon: L.divIcon({ 
+                        className: 'user-location-marker-container', 
+                        html: '<div id="marker-inner" style="transform: rotate(0deg); transform-origin: center center;"></div>', 
+                        iconSize: [40, 40], 
+                        iconAnchor: [20, 20] 
+                    }) 
+                }).addTo(map);
+            }
             
-            // Requisito 4: Seta e bolinha roxa com tamanhos reduzidos via CSS .arrow-wrapper e .marker-blue
-            inner.innerHTML = asArrow ? 
-                `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="10" height="10" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
-                `<div class="marker-blue mx-auto mt-[15px]"></div>`;
+            const inner = document.getElementById('marker-inner');
+            if (inner) {
+                let arrowVisualRotation = rot;
+
+                inner.innerHTML = asArrow ? 
+                    `<div class="arrow-wrapper mx-auto mt-[8px]">
+                        <svg class="nav-arrow-svg" style="transform: rotate(${arrowVisualRotation}deg); transition: none;" viewBox="0 0 100 100">
+                            <path d="M50 10 L85 85 L50 70 L15 85 Z"/>
+                        </svg>
+                    </div>` : 
+                    `<div class="marker-blue mx-auto mt-[16px]"></div>`;
+            }
+                
             userMarker.setLatLng(coords);
         }
 
         async function setDest(latlng, forcedOrigin = null) {
             if (destMarker) map.removeLayer(destMarker);
             destinationLatLng = latlng;
-            destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>' }) }).addTo(map);
+            
+            destMarker = L.marker(latlng, { icon: L.divIcon({ className: 'marker-red', html: '<div class="w-2.5 h-2.5 bg-red-500 rounded-full border-[1.5px] border-white shadow-md mx-auto mt-[8.5px]"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }) }).addTo(map);
             
             document.getElementById('trip-card').classList.add('active');
             document.getElementById('speed-ui').classList.add('ui-lift-active');
@@ -1552,7 +1652,7 @@
         }
 
         function getPathColor() {
-            const colors = { car: '#A855F7', uber: '#A855F7', bus: '#3b82f6', bike: '#22c55e', walk: '#eab308' };
+            const colors = { car: 'var(--accent)', uber: 'var(--accent)', bus: '#3b82f6', bike: '#22c55e', walk: '#eab308' };
             return colors[travelMode];
         }
 
@@ -1595,10 +1695,66 @@
             }
         }
 
+        function updateNavigationIcon(inst) {
+            let iconName = 'arrow-up';
+            if (!inst) return iconName;
+
+            let text = (inst.text || '').toLowerCase();
+            let type = (inst.type || '').toLowerCase();
+            let modifier = (inst.modifier || '').toLowerCase();
+            let combined = type + " " + modifier + " " + text;
+
+            if (combined.includes('arrive') || combined.includes('destination') || combined.includes('chegar') || combined.includes('destino')) {
+                iconName = 'map-pin';
+            } else if (combined.includes('u-turn') || combined.includes('uturn') || combined.includes('turnaround') || combined.includes('retorno')) {
+                iconName = 'corner-down-left';
+            } else if (combined.includes('sharp right') || combined.includes('direita fechada')) {
+                iconName = 'corner-right-down';
+            } else if (combined.includes('sharp left') || combined.includes('esquerda fechada')) {
+                iconName = 'corner-left-down';
+            } else if (combined.includes('slight right') || combined.includes('direita leve')) {
+                iconName = 'arrow-up-right';
+            } else if (combined.includes('slight left') || combined.includes('esquerda leve')) {
+                iconName = 'arrow-up-left';
+            } else if (combined.includes('keep right') || combined.includes('manter à direita')) {
+                iconName = 'arrow-right-circle';
+            } else if (combined.includes('keep left') || combined.includes('manter à esquerda')) {
+                iconName = 'arrow-left-circle';
+            } else if (combined.includes('right') || combined.includes('direita') || combined.includes('virar à direita')) {
+                iconName = 'corner-up-right';
+            } else if (combined.includes('left') || combined.includes('esquerda') || combined.includes('virar à esquerda')) {
+                iconName = 'corner-up-left';
+            } else if (combined.includes('roundabout') || combined.includes('rotatória')) {
+                iconName = 'refresh-cw';
+            } else if (combined.includes('circle') || combined.includes('círculo')) {
+                iconName = 'circle-dashed';
+            } else if (combined.includes('continue') || combined.includes('straight') || combined.includes('continuar') || combined.includes('frente')) {
+                iconName = 'arrow-up-circle';
+            } else if (combined.includes('merge') || combined.includes('juntar')) {
+                iconName = 'merge';
+            } else if (combined.includes('fork') || combined.includes('bifurcação')) {
+                iconName = 'split';
+            } else if (combined.includes('exit') || combined.includes('saída')) {
+                iconName = 'log-out';
+            }
+            return iconName;
+        }
+
         function updateNavigation() {
             if (!routingControl || !routingControl._selectedRoute) return;
             const inst = routingControl._selectedRoute.instructions[0];
             document.getElementById('inst-dist').innerText = `EM ${Math.round(inst.distance)}m`;
+            
+            let newIconName = updateNavigationIcon(inst);
+            const iconContainer = document.getElementById('inst-icon');
+            const currentIcon = iconContainer.getAttribute('data-current-icon');
+            
+            if (currentIcon !== newIconName) {
+                iconContainer.innerHTML = `<i data-lucide="${newIconName}" size="32"></i>`;
+                iconContainer.setAttribute('data-current-icon', newIconName);
+                lucide.createIcons();
+            }
+
             translateText(inst.text);
         }
 
