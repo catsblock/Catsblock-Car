@@ -810,7 +810,7 @@
             }
 
             activeReportsLayer.clearLayers();
-            const currentZoom = map.getZoom();
+        
         
             const visibleReports = reportCache.filter(report => {
                 const reportCfg = config.reports[report.type] || { show: true };
