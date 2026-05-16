@@ -816,11 +816,10 @@
                 const reportCfg = config.reports[report.type] || { show: true };
                 if (!reportCfg.show) return false;
 
-                // Requisito 3: Radares desaparecem ao 16 zoom (excluindo o 16, então <= 15 somem ou > 16 somem? 
-                // Contexto: "Ao 16 zoom" normalmente significa que no nível 16 eles não devem mais estar lá.
+                // Requisito 3: Radares desaparecem ao zoom 16
                 if (report.type === 'Radar' && currentZoom >= 16) return false;
 
-                // Requisito 2: Reportes normais desaparecem ao 19 zoom
+                // Requisito 2: Outros reportes desaparecem ao 19 zoom (mantido do original se existir)
                 if (report.type !== 'Radar' && currentZoom >= 19) return false;
 
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
@@ -837,28 +836,35 @@
                 
                 let iconHtml = '';
                 
-                // Requisito 4: Adiciona efeito de pulsação se estiver a 250m ou menos (ou se for o alerta de proximidade)
+                // Requisito 4: Adiciona efeito de pulsação se estiver a 250m ou menos
                 const isPulsing = distToUser <= 250;
                 const pulsingHtml = isPulsing ? '<div class="pulsing-effect"></div>' : '';
 
-                // Requisito 4: Reportes normais ficam pequenos mas mantém efeitos ao 16 zoom
+                // Requisito 1 e 2: Lógica de Zoom para bolinhas de reporte normal
                 const isNormalReport = data.type !== 'Radar';
-                const isMiniMode = isNormalReport && currentZoom >= 16;
+                
+                // Requisito 1: Bolinhas ficam pequenas ao zoom 15
+                const isSmallAtZoom15 = isNormalReport && Math.floor(currentZoom) === 15;
+                
+                // Requisito 2: Bolinhas ficam normais ao zoom 16 (ou maior, até o limite de 19)
+                const isNormalAtZoom16 = isNormalReport && currentZoom >= 16;
 
-                if (isMiniMode) {
-                    // Mini mode: bolinha pequena mas com pulsação (Requisito 4)
+                if (isSmallAtZoom15) {
+                    // Bolinha pequena ao zoom 15 (Requisito 1)
                     iconHtml = `<div style="width:12px; height:12px; background:${markerColor}; border-radius:50%; border:2px solid white; position:relative;">${pulsingHtml}</div>`;
                 } else if (markerIconUrl.startsWith('http')) {
+                    // Tamanho normal (30px definido na classe .report-marker) ao zoom 16 (Requisito 2)
                     iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:30px; height:30px;">${pulsingHtml}</div>`;
                 } else {
+                    // Estilo padrão para ícones Lucide
                     iconHtml = `<div class="report-marker" style="background:${markerColor}">${pulsingHtml}<i data-lucide="${markerIconUrl}" color="white" size="12"></i></div>`;
                 }
 
                 const markerIcon = L.divIcon({
                     className: 'custom-div-icon',
                     html: iconHtml,
-                    iconSize: isMiniMode ? [12, 12] : [26, 26],
-                    iconAnchor: isMiniMode ? [6, 6] : [13, 13]
+                    iconSize: isSmallAtZoom15 ? [12, 12] : [26, 26],
+                    iconAnchor: isSmallAtZoom15 ? [6, 6] : [13, 13]
                 });
                 
                 const marker = L.marker([data.lat, data.lng], { icon: markerIcon });
@@ -1292,7 +1298,7 @@
                 attributionControl: false, 
                 touchRotate: true,
                 inertia: false,
-                minZoom: 13, // Requisito 1: Zoom mínimo é 13
+                minZoom: 13, 
                 maxZoom: 20
             }).setView(userPos, 19);
 
@@ -1376,7 +1382,8 @@
             if (!userPos) return;
 
             const currentZoom = map.getZoom();
-            // Radares (Requirement 3) desaparecem ao 16 zoom
+            
+            // Requisito 3: Radares desaparecem ao zoom 16
             if (currentZoom >= 16) {
                 alertLayer.clearLayers();
                 return;
@@ -1407,7 +1414,7 @@
                         const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [20, 20] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction' && config.reports['Obras'].show) {
-                        // Reportes normais (Requirement 2) desaparecem ao 19 zoom
+                        // Outros reportes desaparecem ao 19 zoom (Requirement 2 mantido)
                         if (currentZoom >= 19) return;
 
                         L.circle(coords, { radius: 30, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
