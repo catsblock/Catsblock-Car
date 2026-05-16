@@ -127,18 +127,19 @@
         }
         .btn-stop { background: #ff453a; color: white; }
 
-        /* Requisito 1: Tamanho máximo absoluto para elementos visuais */
+        /* Requisito 1 & 4: Tamanho ajustado para bolinha roxa (user marker) */
         .marker-blue { 
-            width: 14px; height: 14px; 
-            max-width: 14px; max-height: 14px;
+            width: 10px; height: 10px; 
+            max-width: 10px; max-height: 10px;
             background: var(--accent); border: 2px solid white; border-radius: 50%; 
             box-shadow: 0 0 10px var(--accent); 
         }
         
+        /* Requisito 4: Radares um pouco menores */
         .radar-dot { 
-            width: 22px; height: 22px; 
-            max-width: 22px; max-height: 22px;
-            border: 3px solid white; border-radius: 50%; cursor: pointer; 
+            width: 18px; height: 18px; 
+            max-width: 18px; max-height: 18px;
+            border: 2px solid white; border-radius: 50%; cursor: pointer; 
             box-shadow: 0 0 10px rgba(0,0,0,0.5); 
         }
         .radar-speed { background: #ff453a; }
@@ -186,9 +187,10 @@
         }
         .mode-btn.active { background: #A855F7; color: white; }
 
+        /* Requisito 4: Seta um pouco menor */
         .arrow-wrapper {
-            width: 28px; height: 28px;
-            max-width: 28px; max-height: 28px;
+            width: 22px; height: 22px;
+            max-width: 22px; max-height: 22px;
             background: #A855F7; border: 2px solid white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
@@ -234,17 +236,16 @@
         .spinner { width: 40px; height: 40px; border: 4px solid #A855F7; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Requisito 1: Trava de tamanho para ícones de reporte */
+        /* Requisito 4: Ícones de reporte reduzidos de 30px para 22px */
         .report-marker { 
-            width: 30px; height: 30px; 
-            max-width: 30px; max-height: 30px;
-            border-radius: 50%; border: 3px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); 
+            width: 22px; height: 22px; 
+            max-width: 22px; max-height: 22px;
+            border-radius: 50%; border: 2px solid white; box-shadow: 0 0 15px rgba(0,0,0,0.5); 
             display: flex; align-items: center; justify-content: center; overflow: hidden; 
             background-size: cover; background-position: center; 
             position: relative;
         }
 
-        /* Requisito 4: Animação de Pulsação */
         .pulsing-effect {
             position: absolute;
             width: 100%;
@@ -800,27 +801,23 @@
         function renderFilteredReports() {
             if (!userPos) return;
 
-            const isMovingEnough = currentSpeed >= 4;
             const isViewingPreview = !!destinationLatLng && !isNavigating; 
-            
+            const currentZoom = map.getZoom();
+            const isMovingEnough = currentSpeed >= 4;
             if (isNavigating && !isMovingEnough) {
                 activeReportsLayer.clearLayers();
                 return; 
             }
 
             activeReportsLayer.clearLayers();
-
             const currentZoom = map.getZoom();
-
+        
             const visibleReports = reportCache.filter(report => {
                 const reportCfg = config.reports[report.type] || { show: true };
                 if (!reportCfg.show) return false;
 
-                // Requisito 3: Radares desaparecem ao zoom 16
-                if (report.type === 'Radar' && currentZoom >= 16) return false;
-
-                // Requisito 2: Outros reportes desaparecem ao 19 zoom (mantido do original se existir)
-                if (report.type !== 'Radar' && currentZoom >= 19) return false;
+                // Requisito 3: Radares desaparecem ao zoom 16 ou menos
+                if (report.type === 'Radar' && currentZoom <= 16) return false;
 
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
                 let isWithinRange = distToUser <= 2000;
@@ -830,41 +827,33 @@
 
             visibleReports.forEach(data => {
                 const distToUser = getDistance(userPos, [data.lat, data.lng]);
-                
                 const markerColor = getReportColor(data.type, data.subtype);
                 const markerIconUrl = getReportIcon(data.type, data.subtype, true);
                 
                 let iconHtml = '';
-                
-                // Requisito 4: Adiciona efeito de pulsação se estiver a 250m ou menos
                 const isPulsing = distToUser <= 250;
                 const pulsingHtml = isPulsing ? '<div class="pulsing-effect"></div>' : '';
 
-                // Requisito 1 e 2: Lógica de Zoom para bolinhas de reporte normal
-                const isNormalReport = data.type !== 'Radar';
-                
-                // Requisito 1: Bolinhas ficam pequenas ao zoom 15
-                const isSmallAtZoom15 = isNormalReport && Math.floor(currentZoom) === 15;
-                
-                // Requisito 2: Bolinhas ficam normais ao zoom 16 (ou maior, até o limite de 19)
-                const isNormalAtZoom16 = isNormalReport && currentZoom >= 16;
+                // Requisito 1: Bolinhas de reporte ficam pequenas ao zoom 15 ou menos
+                // Requisito 2: Bolinhas normais ao zoom 16 ou maior
+                const isMiniMode = currentZoom <= 15;
 
-                if (isSmallAtZoom15) {
-                    // Bolinha pequena ao zoom 15 (Requisito 1)
-                    iconHtml = `<div style="width:12px; height:12px; background:${markerColor}; border-radius:50%; border:2px solid white; position:relative;">${pulsingHtml}</div>`;
+                if (isMiniMode) {
+                    // Requisito 1: Bolinha pequena (mini mode)
+                    iconHtml = `<div style="width:8px; height:8px; background:${markerColor}; border-radius:50%; border:1.5px solid white; position:relative; box-shadow: 0 0 5px rgba(0,0,0,0.5);">${pulsingHtml}</div>`;
                 } else if (markerIconUrl.startsWith('http')) {
-                    // Tamanho normal (30px definido na classe .report-marker) ao zoom 16 (Requisito 2)
-                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none; width:30px; height:30px;">${pulsingHtml}</div>`;
+                    // Requisito 2 & 4: Bolinha normal mas compacta (22px conforme style)
+                    iconHtml = `<div class="report-marker" style="background-image:url('${markerIconUrl}'); border:none; box-shadow:none;">${pulsingHtml}</div>`;
                 } else {
-                    // Estilo padrão para ícones Lucide
-                    iconHtml = `<div class="report-marker" style="background:${markerColor}">${pulsingHtml}<i data-lucide="${markerIconUrl}" color="white" size="12"></i></div>`;
+                    // Requisito 2 & 4: Bolinha normal mas compacta (22px conforme style)
+                    iconHtml = `<div class="report-marker" style="background:${markerColor}">${pulsingHtml}<i data-lucide="${markerIconUrl}" color="white" size="10"></i></div>`;
                 }
 
                 const markerIcon = L.divIcon({
                     className: 'custom-div-icon',
                     html: iconHtml,
-                    iconSize: isSmallAtZoom15 ? [12, 12] : [26, 26],
-                    iconAnchor: isSmallAtZoom15 ? [6, 6] : [13, 13]
+                    iconSize: isMiniMode ? [8, 8] : [22, 22],
+                    iconAnchor: isMiniMode ? [4, 4] : [11, 11]
                 });
                 
                 const marker = L.marker([data.lat, data.lng], { icon: markerIcon });
@@ -1011,7 +1000,6 @@
                 const d = getDistance(coords, [report.lat, report.lng]);
                 
                 if (d <= 500) {
-                    // Valida se o reporte está no caminho ou na rua atual
                     const isRelevant = checkReportRelevance(report);
                     if (isRelevant && d < minDist) {
                         minDist = d;
@@ -1025,31 +1013,22 @@
                     updateProximityAlertUI(foundNearby, minDist);
                 }
             } else {
-                // Se o reporte sumiu do radar ou não é mais relevante, fecha imediatamente
                 if (activeAlertaReportId && !alertaPassou) {
                     closeProximityAlert();
                 }
             }
         }
 
-        // Nova função para garantir que o reporte só apareça se estiver no caminho
         function checkReportRelevance(report) {
-            // Se não houver rota, assumimos proximidade radial curta (ex: 40m) como "estar na rua"
             if (!routingControl || !routingControl._selectedRoute) {
                 return getDistance(userPos, [report.lat, report.lng]) < 40;
             }
-
             const pathCoords = routingControl._selectedRoute.coordinates;
-            
-            // Verifica se o reporte está a menos de 35 metros de qualquer ponto da rota planejada
             for (let i = 0; i < pathCoords.length; i++) {
                 const d = getDistance([report.lat, report.lng], [pathCoords[i].lat, pathCoords[i].lng]);
                 if (d < 35) return true;
             }
-            
-            // Adicionalmente verifica se está extremamente perto do usuário atual (mesma rua)
             if (getDistance(userPos, [report.lat, report.lng]) < 30) return true;
-
             return false;
         }
 
@@ -1239,12 +1218,9 @@
                 mapEl.style.transform = `scale(2.5) rotateX(0deg)`;
                 return;
             }
-
             let pitch = Math.min(currentSpeed * 0.54, 65);
             let translateY = Math.min(currentSpeed * 0.2, 25);
-            
             let mapRotation = isFocusedMode ? -rotation : 0;
-
             if (userInteracting) {
                 mapEl.style.transform = `scale(2.5) rotateX(0deg) rotateZ(0deg)`;
             } else {
@@ -1298,7 +1274,7 @@
                 attributionControl: false, 
                 touchRotate: true,
                 inertia: false,
-                minZoom: 13, 
+                minZoom: 13,
                 maxZoom: 20
             }).setView(userPos, 19);
 
@@ -1382,9 +1358,8 @@
             if (!userPos) return;
 
             const currentZoom = map.getZoom();
-            
-            // Requisito 3: Radares desaparecem ao zoom 16
-            if (currentZoom >= 16) {
+            // Requisito 3: Radares desaparecem ao zoom 16 ou menos
+            if (currentZoom <= 16) {
                 alertLayer.clearLayers();
                 return;
             }
@@ -1411,12 +1386,10 @@
                             iconHtml = `<div class="radar-dot ${rInfo.class}"></div>`;
                         }
 
-                        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [20, 20] });
+                        // Requisito 4: Ícone do radar reduzido para 18px conforme CSS .radar-dot
+                        const icon = L.divIcon({ className: '', html: iconHtml, iconSize: [18, 18], iconAnchor: [9, 9] });
                         L.marker(coords, { icon: icon }).on('click', () => showRadarModal(rInfo)).addTo(alertLayer);
                     } else if (props.osm_value === 'construction' && config.reports['Obras'].show) {
-                        // Outros reportes desaparecem ao 19 zoom (Requirement 2 mantido)
-                        if (currentZoom >= 19) return;
-
                         L.circle(coords, { radius: 30, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.5 }).on('click', () => showAlertModal('OBRA', 'Trecho em Obra', 'Cuidado: Operários na pista.', 'construction')).addTo(alertLayer);
                     }
                 });
@@ -1476,10 +1449,8 @@
             
             function frame(now) {
                 const p = Math.min((now - startTime) / duration, 1);
-                
                 let currentLat = start[0] + (target[0] - start[0]) * p;
                 let currentLng = start[1] + (target[1] - start[1]) * p;
-                
                 let dynamicRotation = rotation;
                 let finalCoords = [currentLat, currentLng];
 
@@ -1487,15 +1458,12 @@
                     const coords = routingControl._selectedRoute.coordinates;
                     let closestIdx = 0;
                     let minDist = Infinity;
-
                     for (let i = 0; i < coords.length; i++) {
                         let d = getDistance([currentLat, currentLng], [coords[i].lat, coords[i].lng]);
                         if (d < minDist) { minDist = d; closestIdx = i; }
                     }
-
                     if (minDist < 25) {
                         finalCoords = [coords[closestIdx].lat, coords[closestIdx].lng];
-                        
                         const nextIdx = Math.min(closestIdx + 3, coords.length - 1);
                         if (nextIdx !== closestIdx) {
                             const p1 = coords[closestIdx];
@@ -1514,18 +1482,14 @@
                         dynamicRotation = 90 - angle;
                     }
                 }
-
                 let diff = (dynamicRotation - rotation + 180) % 360 - 180;
                 rotation += diff * 0.4; 
-
                 userPos = finalCoords;
                 updateUserMarker(userPos, rotation, isNavigating);
-                
                 if (isNavigating && !userInteracting && isFocusedMode) {
                     map.setView(userPos, map.getZoom(), { animate: false });
                     updateVisionMode();
                 }
-                
                 if (p < 1) requestAnimationFrame(frame);
             }
             requestAnimationFrame(frame);
@@ -1535,9 +1499,10 @@
             if (!userMarker) userMarker = L.marker(coords, { icon: L.divIcon({ className: '', html: '<div id="marker-inner"></div>', iconSize: [40, 40], iconAnchor: [20, 20] }) }).addTo(map);
             const inner = document.getElementById('marker-inner');
             
+            // Requisito 4: Seta e bolinha roxa com tamanhos reduzidos via CSS .arrow-wrapper e .marker-blue
             inner.innerHTML = asArrow ? 
-                `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="14" height="14" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
-                `<div class="marker-blue mx-auto mt-[13px]"></div>`;
+                `<div class="arrow-wrapper" style="transform: rotate(${rot}deg);"><svg width="10" height="10" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="white"/></svg></div>` : 
+                `<div class="marker-blue mx-auto mt-[15px]"></div>`;
             userMarker.setLatLng(coords);
         }
 
@@ -1574,17 +1539,14 @@
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
-
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
-                
                 const ev = document.getElementById('extra-info-val');
                 const el = document.getElementById('extra-info-label');
                 if (travelMode === 'uber') { el.innerText = "Uber Est."; ev.innerText = `R$ ${(6.5 + dKm * 2.1).toFixed(2)}`; }
                 else if (travelMode === 'car') { el.innerText = "Combustível"; ev.innerText = `R$ ${(dKm/10*5.85).toFixed(2)}`; }
                 else if (travelMode === 'bike') { el.innerText = "Calorias Est."; ev.innerText = `${Math.round(dKm * 32)} kcal`; }
                 else { el.innerText = "Passos Est."; ev.innerText = `${Math.round(dKm * 1400)}`; }
-                
                 renderFilteredReports();
             }).addTo(map);
         }
@@ -1616,9 +1578,7 @@
             document.getElementById('action-area').innerHTML = start ? 
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
                 `<button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>`;
-            
             renderFilteredReports();
-
             if(start) {
                 alertasMostradosNestaViagem.clear();
                 userInteracting = false; 
@@ -1647,11 +1607,9 @@
             if (routingControl) map.removeControl(routingControl);
             if (destMarker) map.removeLayer(destMarker);
             if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
-            
             document.getElementById('trip-card').classList.remove('active');
             document.getElementById('speed-ui').classList.remove('ui-lift-active');
             document.getElementById('report-trigger-btn').classList.remove('ui-lift-active');
-            
             routingControl = null; destinationLatLng = null;
             activeReportsLayer.clearLayers();
             window.history.replaceState({}, '', '/');
