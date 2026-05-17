@@ -231,6 +231,8 @@
             background: var(--surface); border-radius: 32px; padding: 35px;
             width: 100%; max-width: 400px; border: 1px solid rgba(255,255,255,0.1);
             text-align: center;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .report-grid { display: grid; grid-cols: 2; gap: 12px; width: 100%; margin-top: 20px; }
@@ -406,17 +408,79 @@
             <p class="text-zinc-500 text-xs text-left mb-6 font-medium">Ajude outros motoristas informando o que está acontecendo na via.</p>
             
             <div class="grid grid-cols-2 gap-3" id="main-report-grid">
-                <div onclick="submitReport('Polícia')" class="report-option"><i data-lucide="shield-alert" class="text-blue-500"></i><span class="text-[10px] font-bold uppercase">Polícia</span></div>
-                <div onclick="submitReport('Obras')" class="report-option"><i data-lucide="construction" class="text-orange-500"></i><span class="text-[10px] font-bold uppercase">Obras</span></div>
-                <div onclick="submitReport('Faixa Bloqueada')" class="report-option"><i data-lucide="octagon-x" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Faixa Bloq.</span></div>
-                <div onclick="openRadarSubMenu()" class="report-option"><i data-lucide="radar" class="text-purple-500"></i><span class="text-[10px] font-bold uppercase">Radar</span></div>
-                <div onclick="submitReport('Acidente')" class="report-option"><i data-lucide="car-front" class="text-red-400"></i><span class="text-[10px] font-bold uppercase">Acidente</span></div>
-                <div onclick="submitReport('Trânsito Lento')" class="report-option"><i data-lucide="clock" class="text-yellow-500"></i><span class="text-[10px] font-bold uppercase">Trânsito</span></div>
+                <div onclick="openSubMenu('transito-submenu')" class="report-option"><i data-lucide="car" class="text-yellow-500"></i><span class="text-[10px] font-bold uppercase">Trânsito</span></div>
+                <div onclick="openSubMenu('policia-submenu')" class="report-option"><i data-lucide="shield-alert" class="text-blue-500"></i><span class="text-[10px] font-bold uppercase">Polícia</span></div>
+                <div onclick="openSubMenu('acidente-submenu')" class="report-option"><i data-lucide="car-front" class="text-red-400"></i><span class="text-[10px] font-bold uppercase">Acidente</span></div>
+                <div onclick="submitReport('Insegurança')" class="report-option"><i data-lucide="alert-triangle" class="text-purple-500"></i><span class="text-[10px] font-bold uppercase">Insegurança</span></div>
+                <div onclick="openSubMenu('perigo-submenu')" class="report-option"><i data-lucide="triangle-alert" class="text-orange-500"></i><span class="text-[10px] font-bold uppercase">Perigo</span></div>
+                <div onclick="openSubMenu('faixa-submenu')" class="report-option"><i data-lucide="octagon-x" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Faixa Bloq.</span></div>
+                <div onclick="openSubMenu('interditada-submenu')" class="report-option"><i data-lucide="skull" class="text-red-600"></i><span class="text-[10px] font-bold uppercase">Interditada</span></div>
+                <div onclick="openSubMenu('tempo-submenu')" class="report-option"><i data-lucide="cloud-lightning" class="text-slate-400"></i><span class="text-[10px] font-bold uppercase">Tempo Ruim</span></div>
+                <div onclick="openRadarSubMenu()" class="report-option col-span-2"><i data-lucide="radar" class="text-purple-500"></i><span class="text-[10px] font-bold uppercase">Radar</span></div>
             </div>
 
-            <div id="radar-submenu" class="hidden grid grid-cols-2 gap-3">
+            <div id="radar-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
                 <div onclick="submitReport('Radar', 'Trânsito')" class="report-option"><i data-lucide="traffic-light" class="text-yellow-400"></i><span class="text-[10px] font-bold uppercase">Trânsito</span></div>
                 <div onclick="submitReport('Radar', 'Velocidade')" class="report-option"><i data-lucide="gauge" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Velocidade</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="transito-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Trânsito', 'Trânsito Normal')" class="report-option"><i data-lucide="car" class="text-yellow-400"></i><span class="text-[10px] font-bold uppercase">Normal</span></div>
+                <div onclick="submitReport('Trânsito', 'Trânsito lento')" class="report-option"><i data-lucide="timer" class="text-orange-500"></i><span class="text-[10px] font-bold uppercase">Lento</span></div>
+                <div onclick="submitReport('Trânsito', 'Trânsito parado')" class="report-option"><i data-lucide="alert-circle" class="text-red-600"></i><span class="text-[10px] font-bold uppercase">Parado</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="policia-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Polícia', 'Polícia')" class="report-option"><i data-lucide="shield-alert" class="text-blue-500"></i><span class="text-[10px] font-bold uppercase">Polícia</span></div>
+                <div onclick="submitReport('Polícia', 'Polícia oculta')" class="report-option"><i data-lucide="eye-off" class="text-indigo-400"></i><span class="text-[10px] font-bold uppercase">Oculta</span></div>
+                <div onclick="submitReport('Polícia', 'Polícia no outro lado')" class="report-option"><i data-lucide="arrow-right-left" class="text-blue-400"></i><span class="text-[10px] font-bold uppercase">Outro Lado</span></div>
+                <div onclick="submitReport('Polícia', 'Radar móvel')" class="report-option"><i data-lucide="camera" class="text-cyan-500"></i><span class="text-[10px] font-bold uppercase">Radar Móvel</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="acidente-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Acidente', 'Acidente Menor')" class="report-option"><i data-lucide="car-front" class="text-orange-400"></i><span class="text-[10px] font-bold uppercase">Menor</span></div>
+                <div onclick="submitReport('Acidente', 'Acidente Maior')" class="report-option"><i data-lucide="flame" class="text-red-600"></i><span class="text-[10px] font-bold uppercase">Maior</span></div>
+                <div onclick="submitReport('Acidente', 'Acidente de batida')" class="report-option"><i data-lucide="zap" class="text-yellow-500"></i><span class="text-[10px] font-bold uppercase">Batida</span></div>
+                <div onclick="submitReport('Acidente', 'Acidente no outro lado')" class="report-option"><i data-lucide="move-horizontal" class="text-red-400"></i><span class="text-[10px] font-bold uppercase">Outro Lado</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="perigo-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Perigo', 'Perigo')" class="report-option"><i data-lucide="triangle-alert" class="text-yellow-500"></i><span class="text-[10px] font-bold uppercase">Perigo</span></div>
+                <div onclick="submitReport('Perigo', 'Buraco')" class="report-option"><i data-lucide="circle-dot" class="text-yellow-600"></i><span class="text-[10px] font-bold uppercase">Buraco</span></div>
+                <div onclick="submitReport('Perigo', 'Objeto na Rua')" class="report-option"><i data-lucide="box" class="text-orange-400"></i><span class="text-[10px] font-bold uppercase">Objeto</span></div>
+                <div onclick="submitReport('Perigo', 'Semáforo Quebrado')" class="report-option"><i data-lucide="lightbulb-off" class="text-yellow-400"></i><span class="text-[10px] font-bold uppercase">Semáforo</span></div>
+                <div onclick="submitReport('Perigo', 'Carro parado')" class="report-option"><i data-lucide="car-front" class="text-zinc-400"></i><span class="text-[10px] font-bold uppercase">Carro Parado</span></div>
+                <div onclick="submitReport('Perigo', 'Obras')" class="report-option"><i data-lucide="construction" class="text-orange-500"></i><span class="text-[10px] font-bold uppercase">Obras</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="faixa-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Faixa Bloqueada', 'Faixa bloqueada')" class="report-option"><i data-lucide="octagon-x" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Bloqueada</span></div>
+                <div onclick="submitReport('Faixa Bloqueada', 'Faixa da esquerda')" class="report-option"><i data-lucide="arrow-left-to-line" class="text-red-400"></i><span class="text-[10px] font-bold uppercase">Esquerda</span></div>
+                <div onclick="submitReport('Faixa Bloqueada', 'Faixa da direita')" class="report-option"><i data-lucide="arrow-right-to-line" class="text-red-400"></i><span class="text-[10px] font-bold uppercase">Direita</span></div>
+                <div onclick="submitReport('Faixa Bloqueada', 'Faixa do centro')" class="report-option"><i data-lucide="align-center" class="text-red-500"></i><span class="text-[10px] font-bold uppercase">Centro</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="interditada-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Via interditada', 'Obras')" class="report-option"><i data-lucide="cone" class="text-orange-600"></i><span class="text-[10px] font-bold uppercase">Obras</span></div>
+                <div onclick="submitReport('Via interditada', 'Perigo')" class="report-option"><i data-lucide="skull" class="text-red-600"></i><span class="text-[10px] font-bold uppercase">Perigo</span></div>
+                <div onclick="submitReport('Via interditada', 'Evento')" class="report-option"><i data-lucide="party-popper" class="text-purple-500"></i><span class="text-[10px] font-bold uppercase">Evento</span></div>
+                <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
+            </div>
+            
+            <div id="tempo-submenu" class="hidden report-submenu grid grid-cols-2 gap-3">
+                <div onclick="submitReport('Tempo ruim', 'Tempo Ruim')" class="report-option"><i data-lucide="cloud-lightning" class="text-slate-400"></i><span class="text-[10px] font-bold uppercase">Tempo Ruim</span></div>
+                <div onclick="submitReport('Tempo ruim', 'Neblina')" class="report-option"><i data-lucide="cloud-fog" class="text-slate-300"></i><span class="text-[10px] font-bold uppercase">Neblina</span></div>
+                <div onclick="submitReport('Tempo ruim', 'Via escorregadia')" class="report-option"><i data-lucide="waves" class="text-blue-400"></i><span class="text-[10px] font-bold uppercase">Escorregadia</span></div>
+                <div onclick="submitReport('Tempo ruim', 'Alagamento')" class="report-option"><i data-lucide="waves" class="text-blue-600"></i><span class="text-[10px] font-bold uppercase">Alagamento</span></div>
+                <div onclick="submitReport('Tempo ruim', 'Neve na pista')" class="report-option"><i data-lucide="snowflake" class="text-white"></i><span class="text-[10px] font-bold uppercase">Neve</span></div>
+                <div onclick="submitReport('Tempo ruim', 'Nevoeiro')" class="report-option"><i data-lucide="cloud-fog" class="text-slate-400"></i><span class="text-[10px] font-bold uppercase">Nevoeiro</span></div>
+                <div onclick="submitReport('Tempo ruim', 'Gelo na pista')" class="report-option"><i data-lucide="snowflake" class="text-cyan-200"></i><span class="text-[10px] font-bold uppercase">Gelo</span></div>
                 <button onclick="backToMainReport()" class="col-span-2 mt-2 text-zinc-500 text-[10px] font-bold uppercase">Voltar</button>
             </div>
         </div>
@@ -676,11 +740,14 @@
             uiColor: 'purple',
             reports: {
                 'Polícia': { alert: true, show: true },
-                'Obras': { alert: true, show: true },
+                'Perigo': { alert: true, show: true },
                 'Faixa Bloqueada': { alert: true, show: true },
                 'Radar': { alert: true, show: true },
                 'Acidente': { alert: true, show: true },
-                'Trânsito Lento': { alert: true, show: true }
+                'Trânsito': { alert: true, show: true },
+                'Insegurança': { alert: true, show: true },
+                'Via interditada': { alert: true, show: true },
+                'Tempo ruim': { alert: true, show: true }
             }
         };
 
@@ -753,14 +820,22 @@
             }
         }
 
-        function openRadarSubMenu() {
+        function openSubMenu(id) {
             document.getElementById('main-report-grid').classList.add('hidden');
-            document.getElementById('radar-submenu').classList.remove('hidden');
+            document.querySelectorAll('.report-submenu').forEach(el => el.classList.add('hidden'));
+            if(document.getElementById(id)) {
+                document.getElementById(id).classList.remove('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function openRadarSubMenu() {
+            openSubMenu('radar-submenu');
         }
 
         function backToMainReport() {
             document.getElementById('main-report-grid').classList.remove('hidden');
-            document.getElementById('radar-submenu').classList.add('hidden');
+            document.querySelectorAll('.report-submenu').forEach(el => el.classList.add('hidden'));
         }
 
         async function submitReport(type, subtype = "") {
@@ -783,16 +858,39 @@
             let expiryDate = new Date(now);
 
             switch(type) {
+                case 'Trânsito':
+                    if (subtype === 'Trânsito Normal') expiryDate.setHours(now.getHours() + 7);
+                    else if (subtype === 'Trânsito parado') expiryDate.setDate(now.getDate() + 1);
+                    else expiryDate.setHours(now.getHours() + 10);
+                    break;
                 case 'Polícia': 
-                    expiryDate.setHours(now.getHours() + 4); break;
-                case 'Faixa Bloqueada': 
-                    expiryDate.setMonth(now.getMonth() + 4); break;
-                case 'Obras':
-                    expiryDate.setMonth(now.getMonth() + 4); break;
+                    if (subtype === 'Radar móvel') expiryDate.setDate(now.getDate() + 7);
+                    else if (subtype === 'Polícia oculta') expiryDate.setDate(now.getDate() + 3);
+                    else expiryDate.setDate(now.getDate() + 1);
+                    break;
                 case 'Acidente': 
-                    expiryDate.setHours(now.getHours() + 2); break;
+                    expiryDate.setDate(now.getDate() + 2);
+                    break;
+                case 'Insegurança':
+                    expiryDate.setDate(now.getDate() + 7);
+                    break;
+                case 'Perigo':
+                    if (subtype === 'Obras') expiryDate.setMonth(now.getMonth() + 6);
+                    else expiryDate.setDate(now.getDate() + 3);
+                    break;
+                case 'Faixa Bloqueada': 
+                    expiryDate.setMonth(now.getMonth() + 3); 
+                    break;
+                case 'Via interditada':
+                    if (subtype === 'Evento') expiryDate.setMonth(now.getMonth() + 1);
+                    else expiryDate.setMonth(now.getMonth() + 6);
+                    break;
+                case 'Tempo ruim':
+                    expiryDate.setDate(now.getDate() + 1);
+                    break;
                 case 'Radar': 
-                    expiryDate.setFullYear(now.getFullYear() + 1); break;
+                    expiryDate.setFullYear(now.getFullYear() + 1); 
+                    break;
                 default: 
                     expiryDate.setHours(now.getHours() + 4);
             }
@@ -817,22 +915,9 @@
                 await window.fb.setDoc(window.fb.doc(reportsRef, docId), reportData);
                 
                 toggleReportPanel(false);
-                
-                if(type === 'Trânsito Lento') {
-                    animateSlowTrafficLine();
-                }
             } catch (e) {
                 console.error("Erro ao salvar report", e);
             }
-        }
-
-        function animateSlowTrafficLine() {
-            if (!routingControl || !routingControl._selectedRoute) return;
-            const coords = routingControl._selectedRoute.coordinates;
-            if (slowTrafficPolyline) map.removeLayer(slowTrafficPolyline);
-            slowTrafficPolyline = L.polyline(coords, { color: 'red', weight: 4, opacity: 0.9 }).addTo(map);
-            
-            setTimeout(() => { if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; } }, 30000);
         }
 
         let reportCache = []; 
@@ -866,14 +951,16 @@
             const currentZoom = map.getZoom();
             const isMovingEnough = currentSpeed >= 4;
             
-            // Correção do Bug de Exibição: para permitir ver o mapa ao iniciar ou parado antes de andar,
-            // validamos a regra de velocidade apenas se o usuário estiver ativamente em movimento ou navegando.
             if (isNavigating && !isMovingEnough) {
                 activeReportsLayer.clearLayers();
+                if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
                 return; 
             }
 
             activeReportsLayer.clearLayers();
+            if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
+            
+            let highestTrafficSeverity = null;
         
             const visibleReports = reportCache.filter(report => {
                 const reportCfg = config.reports[report.type] || { show: true };
@@ -886,7 +973,6 @@
 
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
                 
-                // Os reportes e radares só aparecem até 2km da sua localização atual
                 if (distToUser > 2000) {
                     return false;
                 }
@@ -908,6 +994,12 @@
             });
 
             visibleReports.forEach(data => {
+                if (data.type === 'Trânsito') {
+                    if (data.subtype === 'Trânsito parado') highestTrafficSeverity = 'red';
+                    else if (data.subtype === 'Trânsito lento' && highestTrafficSeverity !== 'red') highestTrafficSeverity = 'orange';
+                    else if (data.subtype === 'Trânsito Normal' && !highestTrafficSeverity) highestTrafficSeverity = 'yellow';
+                }
+
                 const distToUser = getDistance(userPos, [data.lat, data.lng]);
                 const markerColor = getReportColor(data.type, data.subtype);
                 const markerIconUrl = getReportIcon(data.type, data.subtype, true);
@@ -939,6 +1031,11 @@
                 });
                 marker.addTo(activeReportsLayer);
             });
+
+            if (highestTrafficSeverity && routingControl && routingControl._selectedRoute) {
+                const coords = routingControl._selectedRoute.coordinates;
+                slowTrafficPolyline = L.polyline(coords, { color: highestTrafficSeverity, weight: 6, opacity: 0.9 }).addTo(activeReportsLayer);
+            }
             
             lucide.createIcons();
         }
@@ -949,11 +1046,20 @@
                 if (subtype === 'Trânsito') return '#facc15';
                 return 'var(--accent)';
             }
+            if (type === 'Trânsito') {
+                if (subtype === 'Trânsito parado') return '#ef4444';
+                if (subtype === 'Trânsito Normal') return '#eab308';
+                return '#f97316';
+            }
             switch(type) {
                 case 'Polícia': return '#3b82f6';
                 case 'Obras': return '#f97316';
                 case 'Faixa Bloqueada': return '#ef4444';
                 case 'Acidente': return '#f43f5e';
+                case 'Perigo': return '#f59e0b';
+                case 'Insegurança': return '#a855f7';
+                case 'Via interditada': return '#b91c1c';
+                case 'Tempo ruim': return '#64748b';
                 default: return '#eab308';
             }
         }
@@ -963,8 +1069,52 @@
                 if (subtype === 'Velocidade') return RADAR_VELOCIDADE_IMG;
                 if (subtype === 'Trânsito') return RADAR_TRANSITO_IMG;
             }
+            if (type === 'Trânsito') {
+                if (subtype === 'Trânsito Normal') return 'car';
+                if (subtype === 'Trânsito parado') return 'alert-circle';
+                return 'timer';
+            }
+            if (type === 'Polícia') {
+                if (subtype === 'Polícia oculta') return 'eye-off';
+                if (subtype === 'Polícia no outro lado') return 'arrow-right-left';
+                if (subtype === 'Radar móvel') return 'camera';
+                return 'shield-alert';
+            }
+            if (type === 'Acidente') {
+                if (subtype === 'Acidente Menor') return 'car-front';
+                if (subtype === 'Acidente Maior') return 'flame';
+                if (subtype === 'Acidente de batida') return 'zap';
+                if (subtype === 'Acidente no outro lado') return 'move-horizontal';
+                return 'car-front';
+            }
+            if (type === 'Perigo') {
+                if (subtype === 'Buraco') return 'circle-dot';
+                if (subtype === 'Objeto na Rua') return 'box';
+                if (subtype === 'Semáforo Quebrado') return 'lightbulb-off';
+                if (subtype === 'Carro parado') return 'car-front';
+                if (subtype === 'Obras') return 'construction';
+                return 'triangle-alert';
+            }
+            if (type === 'Faixa Bloqueada') {
+                if (subtype === 'Faixa da esquerda') return 'arrow-left-to-line';
+                if (subtype === 'Faixa da direita') return 'arrow-right-to-line';
+                if (subtype === 'Faixa do centro') return 'align-center';
+                return 'octagon-x';
+            }
+            if (type === 'Via interditada') {
+                if (subtype === 'Obras') return 'cone';
+                if (subtype === 'Evento') return 'party-popper';
+                return 'skull';
+            }
+            if (type === 'Tempo ruim') {
+                if (subtype === 'Neblina' || subtype === 'Nevoeiro') return 'cloud-fog';
+                if (subtype === 'Via escorregadia' || subtype === 'Alagamento') return 'waves';
+                if (subtype === 'Neve na pista' || subtype === 'Gelo na pista') return 'snowflake';
+                return 'cloud-lightning';
+            }
+            if (type === 'Insegurança') return 'alert-triangle';
+
             switch(type) {
-                case 'Polícia': return 'shield-alert';
                 case 'Obras': return 'construction';
                 case 'Radar': return 'radar';
                 case 'Faixa Bloqueada': return 'octagon-x';
@@ -1026,9 +1176,19 @@
 
         function getReportDesc(type, subtype = "") {
             switch(type) {
-                case 'Polícia': return "Presença policial relatada recentemente. Tome cuidado.";
-                case 'Faixa Bloqueada': return "Via está bloqueada. Pode ser obra.";
-                case 'Acidente': return "Colisão ou incidente veicular na pista.";
+                case 'Polícia': 
+                    if (subtype === 'Polícia oculta') return "Polícia escondida reportada. Reduza a velocidade.";
+                    if (subtype === 'Polícia no outro lado') return "Polícia avistada na pista oposta.";
+                    if (subtype === 'Radar móvel') return "Radar móvel em operação na via.";
+                    return "Presença policial relatada recentemente. Tome cuidado.";
+                case 'Faixa Bloqueada': 
+                    return `A ${subtype.toLowerCase()} está bloqueada. Mude de faixa.`;
+                case 'Acidente': 
+                    if (subtype === 'Acidente Menor') return "Acidente sem gravidade na via.";
+                    if (subtype === 'Acidente Maior') return "Acidente grave relatado. Trânsito pode estar parado.";
+                    if (subtype === 'Acidente de batida') return "Colisão entre veículos na pista.";
+                    if (subtype === 'Acidente no outro lado') return "Acidente na pista oposta. Cuidado com curiosos.";
+                    return "Colisão ou incidente veicular na pista.";
                 case 'Radar': 
                     if (subtype === 'Velocidade') {
                         return "Um radar de velocidade reportado por usuários e analisados por Funcionários. Tenha a velocidade baixa pra evitar multas.";
@@ -1036,6 +1196,20 @@
                         return "Um radar de trânsito reportado por usuários e analisados por Funcionários, Não tente passar da cor vermelha ou amarela pra evitar multas.";
                     }
                     return "Fiscalização eletrônica reportada por usuários e analisada por Funcionários.";
+                case 'Perigo':
+                    if (subtype === 'Obras') return "Esse lugar está com uma obra em andamento, pode estar bloqueada.";
+                    return `Atenção: ${subtype} reportado na via.`;
+                case 'Trânsito': 
+                    if (subtype === 'Trânsito Normal') return "Trânsito fluindo normalmente.";
+                    if (subtype === 'Trânsito lento') return "Este lugar está com um trânsito lento, evite esta rua.";
+                    if (subtype === 'Trânsito parado') return "Trânsito completamente parado. Busque rotas alternativas.";
+                    return "Alteração no fluxo de veículos.";
+                case 'Via interditada':
+                    return `A via está interditada por motivo de: ${subtype}.`;
+                case 'Tempo ruim':
+                    return `Condição climática relatada: ${subtype}. Reduza a velocidade.`;
+                case 'Insegurança':
+                    return "Relato de insegurança ou atividade suspeita na região. Fique atento.";
                 case 'Obras': return "Esse lugar está com uma obra em andamento, pode estar bloqueada.";
                 case 'Trânsito Lento': return "Este lugar está com um trânsito lento, evite esta rua.";
                 default: return "Evento relatado na via. Dirija com cuidado.";
