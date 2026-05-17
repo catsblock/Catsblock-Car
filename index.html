@@ -766,6 +766,18 @@
         async function submitReport(type, subtype = "") {
             if (!userPos || !window.currentAuthUser) return;
 
+            // Restrição de Segurança: Somente a ID de administrador pode reportar Radares.
+            if (type === 'Radar' && window.currentAuthUser.uid !== "hvVUwrQn6ZQIQFbHBars25NPW9P2") {
+                showAlertModal(
+                    'ACESSO NEGADO', 
+                    'Apenas Funcionários', 
+                    'Você não pode reportar aqui. Apenas funcionários podem reportar. Pra reportar um radar e funcionários avaliar, Vá no perfil do Tiktok chamado S4ttings, entre no pv de este perfil e envie a localização de aonde o radar está e nossa equipe vai analisar.', 
+                    'shield-alert'
+                );
+                toggleReportPanel(false);
+                return;
+            }
+
             const now = new Date();
             let expiryDate = new Date(now);
 
@@ -859,16 +871,34 @@
 
             activeReportsLayer.clearLayers();
         
-        
             const visibleReports = reportCache.filter(report => {
                 const reportCfg = config.reports[report.type] || { show: true };
                 if (!reportCfg.show) return false;
 
-                if (report.type === 'Radar' && currentZoom <= 16) return false;
+                // Regra estrita de exibição de radares
+                if (report.type === 'Radar') {
+                    if (report.creator !== "hvVUwrQn6ZQIQFbHBars25NPW9P2") return false;
+                    if (currentZoom <= 16) return false;
+                }
 
-                const distToUser = getDistance(userPos, [report.lat, report.lng]);
-                let isWithinRange = distToUser <= 2000;
-                if (isViewingPreview) isWithinRange = true; 
+                // Filtro para exibição exclusiva no caminho ativo
+                let isWithinRange = false;
+                
+                if (routingControl && routingControl._selectedRoute) {
+                    const pathCoords = routingControl._selectedRoute.coordinates;
+                    for (let i = 0; i < pathCoords.length; i++) {
+                        const d = getDistance([report.lat, report.lng], [pathCoords[i].lat, pathCoords[i].lng]);
+                        if (d <= 30) {
+                            isWithinRange = true;
+                            break;
+                        }
+                    }
+                } else {
+                    // Sem rota ativa, detecta nas imediações do usuário como limite rígido de preview estático.
+                    const distToUser = getDistance(userPos, [report.lat, report.lng]);
+                    if (distToUser <= 30) isWithinRange = true;
+                }
+
                 return isWithinRange;
             });
 
@@ -941,8 +971,13 @@
         function showReportDetail(id, data) {
             lastSelectedReportId = id;
             document.getElementById('alert-type').innerText = "REPORT DE USUÁRIO";
-            document.getElementById('alert-title').innerText = `${data.type} ${data.subtype || ''}`;
-            document.getElementById('alert-desc-text').innerText = getReportDesc(data.type);
+            
+            let titleText = `${data.type} ${data.subtype || ''}`.trim();
+            if (data.type === 'Radar' && data.subtype === 'Velocidade') titleText = "Radar de Velocidade";
+            if (data.type === 'Radar' && data.subtype === 'Trânsito') titleText = "Radar de Trânsito";
+            document.getElementById('alert-title').innerText = titleText;
+            
+            document.getElementById('alert-desc-text').innerText = getReportDesc(data.type, data.subtype);
             document.getElementById('creator-id').innerText = data.creator;
             
             const iconBox = document.getElementById('alert-icon-box');
@@ -964,22 +999,41 @@
 
             const btnNotExists = document.getElementById('btn-not-exists');
             const btnStillThere = document.getElementById('btn-still-there');
+            const creatorIdEl = document.getElementById('creator-id');
+            const creatorIdLabel = creatorIdEl.previousElementSibling;
 
-            btnStillThere.disabled = !isNear;
-            btnStillThere.style.opacity = isNear ? '1' : '0.3';
-            btnNotExists.disabled = !isNear;
-            btnNotExists.style.opacity = isNear ? '1' : '0.3';
+            // Bloqueio de informações e sistema de votos exclusivamente para os Radares
+            if (data.type === 'Radar') {
+                btnNotExists.style.display = 'none';
+                btnStillThere.style.display = 'none';
+                creatorIdEl.style.display = 'none';
+                creatorIdLabel.style.display = 'none';
+            } else {
+                btnNotExists.style.display = 'block';
+                btnStillThere.style.display = 'block';
+                creatorIdEl.style.display = 'block';
+                creatorIdLabel.style.display = 'block';
+                
+                btnStillThere.disabled = !isNear;
+                btnStillThere.style.opacity = isNear ? '1' : '0.3';
+                btnNotExists.disabled = !isNear;
+                btnNotExists.style.opacity = isNear ? '1' : '0.3';
+            }
 
             lucide.createIcons();
             document.getElementById('alert-modal').style.display = 'flex';
         }
 
-        function getReportDesc(type) {
+        function getReportDesc(type, subtype = "") {
+            if (type === 'Radar') {
+                if (subtype === 'Velocidade') return "Um radar de velocidade reportado por usuários e analisados por Funcionários. Tenha a velocidade baixa pra evitar multas.";
+                if (subtype === 'Trânsito') return "Um radar de trânsito reportado por usuários e analisados por Funcionários, Não tente passar da cor vermelha ou amarela pra evitar multas.";
+                return "Fiscalização eletrônica reportada por usuários e analisada por Funcionários.";
+            }
             switch(type) {
                 case 'Polícia': return "Presença policial relatada recentemente. Tome cuidado.";
                 case 'Faixa Bloqueada': return "Via está bloqueada. Pode ser obra.";
                 case 'Acidente': return "Colisão ou incidente veicular na pista.";
-                case 'Radar': return "Fiscalização eletrônica reportada por usuários.";
                 case 'Obras': return "Esse lugar está com uma obra em andamento, pode estar bloqueada.";
                 case 'Trânsito Lento': return "Este lugar está com um trânsito lento, evite esta rua.";
                 default: return "Evento relatado na via. Dirija com cuidado.";
