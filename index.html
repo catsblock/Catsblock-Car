@@ -866,7 +866,9 @@
             const currentZoom = map.getZoom();
             const isMovingEnough = currentSpeed >= 4;
             
-            if (!isMovingEnough) {
+            // Correção do Bug de Exibição: para permitir ver o mapa ao iniciar ou parado antes de andar,
+            // validamos a regra de velocidade apenas se o usuário estiver ativamente em movimento ou navegando.
+            if (isNavigating && !isMovingEnough) {
                 activeReportsLayer.clearLayers();
                 return; 
             }
@@ -884,6 +886,7 @@
 
                 const distToUser = getDistance(userPos, [report.lat, report.lng]);
                 
+                // Os reportes e radares só aparecem até 2km da sua localização atual
                 if (distToUser > 2000) {
                     return false;
                 }
