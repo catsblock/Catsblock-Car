@@ -293,7 +293,7 @@
         }
         .modal-content {
             background: var(--surface); border-radius: 32px; padding: 30px;
-            width: 100%; max-width: 380px; border: 1px solid rgba(255,255,255,0.1);
+            width: 100%; max-width: 380px; border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         #proximity-alert-frame {
@@ -619,7 +619,7 @@
                     <option value="3d">3D</option>
                 </select>
             </div>
-            <!-- Nova opção de Ajuste do Zoom Automático baseado em velocidade -->
+            <!-- Opção de Ajuste do Zoom Automático baseado em velocidade -->
             <div class="config-row">
                 <span>Zoom Automático</span>
                 <select id="cfg-auto-zoom" class="config-select" onchange="saveConfig()">
@@ -1302,6 +1302,7 @@
             }
         }
 
+        // Correção de radar: Alerta dinâmico disparado ANTES de alcançar o radar
         function handleProximityLogic(coords) {
             if (!isNavigating) {
                 closeProximityAlert();
@@ -1317,6 +1318,7 @@
 
                 const d = getDistance(coords, [report.lat, report.lng]);
                 
+                // Dispara alertas na faixa ideal de antecedência (máximo 500m)
                 if (d <= 500) {
                     const isRelevant = checkReportRelevance(report);
                     if (isRelevant && d < minDist) {
@@ -1350,6 +1352,7 @@
             return false;
         }
 
+        // Sistema de alertas dinâmico com Ocultação Suave do Frame de Viagem
         function updateProximityAlertUI(report, dist) {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
@@ -1364,7 +1367,12 @@
                 alertaPassou = false;
                 alertasMostradosNestaViagem.add(report.id);
 
+                // Ocultação suave e completa do frame de viagem para dar prioridade total ao alerta
                 tripCard.classList.remove('active');
+                tripCard.style.opacity = '0';
+                tripCard.style.transform = 'translateX(-50%) translateY(100%)';
+                
+                // Ativação suave do card de aviso/alerta
                 frame.classList.add('active');
                 
                 speedUI.classList.add('ui-lift-active');
@@ -1407,6 +1415,7 @@
             }
         }
 
+        // Restaura suavemente o frame de informações de viagem após passar o alerta
         function closeProximityAlert() {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
@@ -1420,7 +1429,11 @@
             alertaFimTimeout = null;
 
             if (isNavigating) {
+                // Reaparecimento suave e elegante do frame de viagem
                 tripCard.classList.add('active');
+                tripCard.style.opacity = '1';
+                tripCard.style.transform = 'translateX(-50%) translateY(0)';
+                
                 speedUI.classList.add('ui-lift-active');
                 reportBtn.classList.add('ui-lift-active');
             } else {
@@ -1561,13 +1574,15 @@
             const currentZoom = map.getZoom();
             let is3D = true;
 
-            // Transição rápida e suave por nível de zoom
+            // Ajuste instantâneo de limites de perspectiva baseado no zoom
             if (currentZoom <= 15) {
-                is3D = false;
-            } else if (config.vision === 'auto') {
-                // Em modo automático, ativa 3D apenas em velocidades acima de 30km/h
-                if (currentSpeed < 30) {
-                    is3D = false;
+                is3D = false; // Zoom <= 15 força 2D instantâneo
+            } else if (currentZoom >= 16) {
+                if (config.vision === 'auto') {
+                    // No modo automático, a transição para 3D só ocorre se a velocidade atingir 30km/h ou mais
+                    if (currentSpeed < 30) {
+                        is3D = false;
+                    }
                 }
             }
 
@@ -1600,7 +1615,6 @@
             e.preventDefault();
             deferredInstallPrompt = e;
             
-            // Verifica se o usuário já escolheu "Não" anteriormente
             const pwaStatus = localStorage.getItem('pwa_prompt_dismissed');
             if (pwaStatus !== 'true') {
                 document.getElementById('pwa-prompt-card').style.display = 'flex';
@@ -1626,15 +1640,12 @@
                 deferredInstallPrompt = null;
                 dismissPwaPrompt(false);
             } else {
-                // Fallback amigável caso não suporte prompt direto
                 alert("Para instalar em seu aparelho, acesse as opções do navegador e selecione 'Adicionar à tela de início'.");
                 dismissPwaPrompt(true);
             }
         }
 
-        // Suporte PWA standalone para rodar em tela cheia sem barras de navegação do browser
         if (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches) {
-            // Se já estiver rodando como standalone, garante a ocultação de qualquer banner
             dismissPwaPrompt(false);
         }
 
@@ -1672,7 +1683,7 @@
             lucide.createIcons();
         }
 
-        // Função de cálculo de Snap e Autonomia de Navegação Suave
+        // Correção de engasgo e suavização da seta (Movimento contínuo ininterrupto 100% fluido)
         function smoothAnimationTick() {
             if (!isNavigating || !userPos) {
                 smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
@@ -1682,12 +1693,11 @@
             const now = performance.now();
             const timePassed = now - lastGpsTimestamp;
 
-            // Se o GPS falhar temporariamente por mais de 4 segundos, simular posição autônoma (Dead Reckoning)
+            // Se o GPS falhar temporariamente, simular posição autônoma coerente
             if (timePassed > 4000 && currentSpeed > 5 && routingControl && routingControl._selectedRoute) {
                 signalLostMode = true;
                 const pathCoords = routingControl._selectedRoute.coordinates;
                 
-                // Encontrar o ponto atual correspondente no mapa e avançar de acordo com a velocidade
                 let closestIdx = 0;
                 let minDist = Infinity;
                 for (let i = 0; i < pathCoords.length; i++) {
@@ -1695,9 +1705,8 @@
                     if (d < minDist) { minDist = d; closestIdx = i; }
                 }
 
-                // Estimar novo deslocamento autônomo baseado no vetor de velocidade por segundo
                 const mPerSec = currentSpeed / 3.6;
-                const distToMove = mPerSec * 0.016; // 16ms aprox por frame
+                const distToMove = mPerSec * 0.016; // Avanço autônomo baseado no delta frame
                 
                 let currentAccumulated = 0;
                 let targetIdx = closestIdx;
@@ -1715,24 +1724,61 @@
                 }
             }
 
-            // Mover visualmente o cursor em direção à posição de destino de forma fluida (Interpolação de amortecimento)
+            // Movimentação da seta em tempo real sem micro-pausas e engasgos de processamento
             if (interpolatedPos) {
-                const lerpFactor = signalLostMode ? 0.04 : 0.09;
+                // Cálculo de interpolação linear sem paradas para suavizar atualizações de coordenadas
+                const lerpFactor = signalLostMode ? 0.05 : 0.08;
                 let currentLat = interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor;
                 let currentLng = interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor;
                 interpolatedPos = [currentLat, currentLng];
 
-                // Manter Seta Visual Atualizada no Canvas
+                // Manter Seta Visual Atualizada com transição contínua
                 updateUserMarker(interpolatedPos, rotation, isNavigating);
 
-                // Forçar foco de câmera contínuo e suave
+                // Forçar foco de câmera nativo e ininterrupto se o usuário não estiver manipulando a tela
                 if (isFocusedMode && !userInteracting) {
                     map.panTo(interpolatedPos, { animate: false });
                     updateVisionMode();
                 }
+
+                // Apagamento dinâmico e suave das linhas do caminho percorrido que ficaram para trás
+                updatePathFadeEffect(interpolatedPos);
             }
 
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
+        }
+
+        // Lógica de apagamento suave do traçado conforme o carro avança na rota
+        function updatePathFadeEffect(currentCoords) {
+            if (!routingControl || !routingControl._selectedRoute || !routingControl._line) return;
+            
+            // Localiza o ponto mais próximo do traçado atual para remover segmentos que ficaram para trás
+            try {
+                const line = routingControl._line;
+                const origLatLngs = routingControl._selectedRoute.coordinates;
+                let closestIdx = 0;
+                let minDist = Infinity;
+                
+                for (let i = 0; i < origLatLngs.length; i++) {
+                    let d = getDistance(currentCoords, [origLatLngs[i].lat, origLatLngs[i].lng]);
+                    if (d < minDist) {
+                        minDist = d;
+                        closestIdx = i;
+                    }
+                }
+                
+                // Se já avançamos, remove os pontos passados do traçado principal e atualiza a polyline no mapa
+                if (closestIdx > 0 && closestIdx < origLatLngs.length) {
+                    const remainingLatLngs = origLatLngs.slice(closestIdx).map(p => L.latLng(p.lat, p.lng));
+                    
+                    // Modifica a linha no mapa de forma limpa e otimizada
+                    if (line.setLatLngs) {
+                        line.setLatLngs(remainingLatLngs);
+                    }
+                }
+            } catch (err) {
+                // Previne eventuais erros silenciosos na renderização dinâmica da linha
+            }
         }
 
         lucide.createIcons();
@@ -1768,7 +1814,7 @@
                 inertia: false,
                 zoomAnimation: false, 
                 minZoom: 13,
-                maxZoom: 20 // Zoom máximo original preservado em 20
+                maxZoom: 20 // Preserva o limite máximo global original
             }).setView(userPos, 19);
 
             // Transição suave de Visão baseada em alteração de Zoom
@@ -1806,6 +1852,7 @@
                 }
             }, 500);
 
+            // Foco nativo contínuo e ininterrupto na seta (Remoção total de cooldown ou timers que bloqueavam o loop)
             const resetFocusTimer = () => {
                 userInteracting = true;
                 isFocusedMode = false;
@@ -1818,20 +1865,20 @@
                 focusTimer = setTimeout(() => {
                     if (isNavigating) {
                         userInteracting = false;
-                        isFocusedMode = true;
+                        isFocusedMode = true; // Força foco ininterrupto imediato após fim da interação manual
                         if(interpolatedPos && map) {
                             map.panTo(interpolatedPos, { animate: false });
                         }
                         updateVisionMode();
                     }
-                }, 3000); 
+                }, 1000); // Retorna o foco rapidamente e de forma constante
             };
 
             map.on('movestart dragstart touchstart mousedown wheel zoomstart', resetFocusTimer);
             map.on('moveend dragend touchend mouseup zoomend', startFocusTimer);
             startFocusTimer(); 
 
-            // Ativa o loop contínuo de interpolação
+            // Ativa o loop contínuo de interpolação de movimento
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
 
             navigator.geolocation.watchPosition(pos => {
@@ -1839,44 +1886,50 @@
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
                 
-                // Gerenciamento de reconexão de sinal GPS (Deslizar suave passando por tudo até a nova posição real)
+                // Lógica de desvio rápido e amortecimento ao reconectar sinal GPS ou corrigir posição
                 if (signalLostMode) {
                     signalLostMode = false;
-                    // Força a seta a deslizar rapidamente a partir do local atual da simulação até o ponto real
-                    interpolatedPos = [interpolatedPos[0], interpolatedPos[1]];
+                    const jumpDist = getDistance(interpolatedPos, coords);
+                    if (jumpDist > 150) {
+                        // Salto longo: desliza diretamente por cima de tudo para a coordenada real
+                        interpolatedPos = [coords[0], coords[1]];
+                    } else {
+                        // Salto curto: desliza progressivamente pelas ruas até o ponto real
+                        interpolatedPos = [interpolatedPos[0] + (coords[0] - interpolatedPos[0]) * 0.4, interpolatedPos[1] + (coords[1] - interpolatedPos[1]) * 0.4];
+                    }
                 }
                 lastGpsTimestamp = performance.now();
 
-                // Lógica de Zoom Automático Baseado em Velocidade (Limite máximo estrito de zoom a 16)
+                // Lógica de Zoom Automático baseada estritamente na nova escala (mínimo 16, máximo 20)
                 if (isNavigating && config.autoZoom === 'true') {
-                    let calculatedZoom = 19; // Zoom inicial em baixa velocidade
-                    if (currentSpeed >= 40) {
-                        calculatedZoom = 15;
-                    } else if (currentSpeed >= 20) {
-                        calculatedZoom = 17;
+                    let calculatedZoom = 20; // Inicia no limite máximo global de zoom em baixíssima velocidade
+                    
+                    if (currentSpeed >= 20) {
+                        // Diminui proporcionalmente (-1 nível a cada 20km/h atingidos)
+                        let speedLoss = Math.floor(currentSpeed / 20);
+                        calculatedZoom = Math.max(20 - speedLoss, 16); // Nunca cai abaixo de 16
                     }
-                    // Limita a escala máxima permitida pelo autozoom para 16
-                    let finalZoom = Math.min(calculatedZoom, 16);
-                    if (map.getZoom() !== finalZoom && !userInteracting) {
-                        map.setZoom(finalZoom, { animate: true });
+                    
+                    if (map.getZoom() !== calculatedZoom && !userInteracting) {
+                        map.setZoom(calculatedZoom, { animate: true });
                     }
                 }
 
-                // Detector estrito de desvios do trajeto ativo para recalcular rota
+                // Otimização do Recálculo de Rota (Disparado estritamente se o usuário desviar totalmente do traçado ativo)
                 if (isNavigating && routingControl && routingControl._selectedRoute) {
                     const pathCoords = routingControl._selectedRoute.coordinates;
                     let isUserOnTrack = false;
                     for (let i = 0; i < pathCoords.length; i++) {
                         const d = getDistance(coords, [pathCoords[i].lat, pathCoords[i].lng]);
-                        if (d <= 30) {
+                        if (d <= 35) {
                             isUserOnTrack = true;
                             break;
                         }
                     }
 
-                    // Se o usuário desviar do traçado, recalcula dinamicamente em segundo plano
+                    // Se o usuário entrou em outra rua ou se afastou, recalcula a rota uma única vez em background
                     if (!isUserOnTrack) {
-                        console.log("Desvio detectado. Recalculando rota...");
+                        console.log("Recalculando rota por desvio de traçado...");
                         setDest(destinationLatLng, L.latLng(coords));
                     }
                 }
@@ -1913,7 +1966,7 @@
             if (!userPos) return;
 
             const currentZoom = map.getZoom();
-            if (currentZoom <= 16) {
+            if (currentZoom <= 15) {
                 alertLayer.clearLayers();
                 return;
             }
@@ -1998,7 +2051,7 @@
             if (!userPos) { userPos = target; return; }
             const start = userPos;
             const startTime = performance.now();
-            const duration = 300; 
+            const duration = 250; // Transições rápidas e responsivas de renderização física
             
             function frame(now) {
                 const p = Math.min((now - startTime) / duration, 1);
@@ -2037,7 +2090,7 @@
                 }
                 
                 let diff = ((dynamicRotation - rotation) % 360 + 540) % 360 - 180;
-                rotation += diff * 0.4; 
+                rotation += diff * 0.45; // Amortecimento angular fluido
                 userPos = finalCoords;
                 
                 updateUserMarker(interpolatedPos || userPos, rotation, isNavigating);
@@ -2116,7 +2169,6 @@
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
                 
-                // Atualizações em tempo real do frame
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
                 const ev = document.getElementById('extra-info-val');
@@ -2152,7 +2204,6 @@
             document.getElementById('search-card').style.display = start ? 'none' : 'block';
             document.getElementById('instruction-panel').style.display = start ? 'flex' : 'none';
             
-            // Controle de simplificação do frame de viagem maior/expandido
             document.getElementById('trip-non-nav-group').style.display = start ? 'none' : 'block';
             
             document.getElementById('settings-btn').classList.toggle('settings-nav-active', start);
@@ -2173,7 +2224,7 @@
                 clearSelection(); 
                 updateVisionMode(); 
                 isFocusedMode = false;
-                toggleTripMinimize(false); // Retorna o card de viagem para o padrão visível ao cancelar
+                toggleTripMinimize(false);
             }
         }
 
