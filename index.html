@@ -10,6 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
+    <!-- PWA Manifest & Meta Tags para simular app nativo no celular -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CatsBlock Car">
+    
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -97,7 +102,7 @@
             top: -50%;
             left: -50%;
             z-index: 1; 
-            transition: transform 0.3s ease-out; 
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); 
         }
 
         .map-3d-active { transform-origin: center center; }
@@ -105,7 +110,9 @@
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
         .ui-container * { pointer-events: auto; }
         .top-ui { top: 20px; }
-        .bottom-ui { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100%); width: 92%; max-width: 420px; z-index: 2000; display: none; opacity: 0; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Modificações de layout do bottom-ui para transições de estado */
+        .bottom-ui { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%) translateY(100%); width: 92%; max-width: 420px; z-index: 2000; display: none; opacity: 0; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
         .bottom-ui.active { display: block; opacity: 1; transform: translateX(-50%) translateY(0); }
 
         .glass-card {
@@ -113,6 +120,7 @@
             border-radius: 28px; padding: 20px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
         #instruction-panel {
@@ -157,6 +165,7 @@
             transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .ui-lift-active { bottom: 320px !important; }
+        .ui-lift-minimized { bottom: 210px !important; }
 
         #report-trigger-btn {
             position: absolute; right: 20px; bottom: 25px;
@@ -516,6 +525,15 @@
         </div>
     </div>
 
+    <!-- Banner PWA para Adicionar à Tela Inicial -->
+    <div id="pwa-prompt-card" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[380px] bg-[#121214] border border-white/10 rounded-2xl p-4 shadow-2xl z-[9999] hidden flex flex-col gap-3">
+        <p class="text-xs text-zinc-300 font-bold leading-relaxed">Você gostaria de adicionar o nosso site na sua tela inicial? Isso facilitará o acesso ao site de forma nativa e rápida.</p>
+        <div class="flex gap-2">
+            <button onclick="dismissPwaPrompt(true)" class="flex-1 bg-white/5 hover:bg-white/10 text-white rounded-xl py-2.5 text-[11px] font-extrabold uppercase transition-all">Não</button>
+            <button onclick="triggerPwaInstall()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl py-2.5 text-[11px] font-extrabold uppercase transition-all" style="background-color: var(--accent);">Sim</button>
+        </div>
+    </div>
+
     <div id="alert-modal" onclick="closeAlertModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div id="alert-icon-box" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 overflow-hidden bg-cover bg-center"></div>
@@ -601,6 +619,14 @@
                     <option value="3d">3D</option>
                 </select>
             </div>
+            <!-- Nova opção de Ajuste do Zoom Automático baseado em velocidade -->
+            <div class="config-row">
+                <span>Zoom Automático</span>
+                <select id="cfg-auto-zoom" class="config-select" onchange="saveConfig()">
+                    <option value="true">Ativado</option>
+                    <option value="false">Desativado</option>
+                </select>
+            </div>
         </div>
 
         <div id="list-caminhos" class="settings-list">
@@ -676,31 +702,40 @@
         <div id="map"></div>
     </div>
 
+    <!-- Frame de Viagem Modificado para os Estados (Expandido / Minimizado) -->
     <div class="bottom-ui" id="trip-card">
-        <div class="glass-card relative">
-            <div class="absolute top-4 right-4 flex flex-col gap-2 items-center">
-                <button onclick="clearSelection()" class="text-zinc-500 hover:text-white p-2" title="Fechar">
-                    <i data-lucide="x" size="20"></i>
+        <div class="glass-card relative" id="trip-card-inner">
+            <!-- Botões de Minimização / Expansão -->
+            <div class="absolute top-4 right-4 flex flex-col gap-2 items-center z-[2005]">
+                <button id="btn-minimize-trip" onclick="toggleTripMinimize(true)" class="text-zinc-500 hover:text-white p-1" title="Minimizar">
+                    <i data-lucide="minus" size="20"></i>
                 </button>
-                <button onclick="shareTrip()" class="text-zinc-500 hover:text-white p-2" title="Compartilhar" style="transition: color 0.3s;">
-                    <i data-lucide="share-2" size="20"></i>
+                <button id="btn-expand-trip" onclick="toggleTripMinimize(false)" class="text-zinc-500 hover:text-white p-1 hidden" title="Expandir">
+                    <i data-lucide="chevron-up" size="20"></i>
+                </button>
+                <button onclick="clearSelection()" class="text-zinc-500 hover:text-white p-1" title="Fechar">
+                    <i data-lucide="x" size="20"></i>
                 </button>
             </div>
             
-            <div id="mode-selector" class="flex justify-between gap-2 mb-4 pr-16">
-                <button onclick="setTravelMode('car')" class="mode-btn active" id="mode-car"><i data-lucide="car" size="18"></i></button>
-                <button onclick="setTravelMode('uber')" class="mode-btn" id="mode-uber"><i data-lucide="smartphone" size="18"></i></button>
-                <button onclick="setTravelMode('bus')" class="mode-btn" id="mode-bus"><i data-lucide="bus" size="18"></i></button>
-                <button onclick="setTravelMode('bike')" class="mode-btn" id="mode-bike"><i data-lucide="bike" size="18"></i></button>
-                <button onclick="setTravelMode('walk')" class="mode-btn" id="mode-walk"><i data-lucide="person-standing" size="18"></i></button>
+            <!-- Grupo de Layouts Secundários (Ocultados no modo Minimizado e Expandido da navegação) -->
+            <div id="trip-non-nav-group">
+                <div id="mode-selector" class="flex justify-between gap-2 mb-4 pr-16">
+                    <button onclick="setTravelMode('car')" class="mode-btn active" id="mode-car"><i data-lucide="car" size="18"></i></button>
+                    <button onclick="setTravelMode('uber')" class="mode-btn" id="mode-uber"><i data-lucide="smartphone" size="18"></i></button>
+                    <button onclick="setTravelMode('bus')" class="mode-btn" id="mode-bus"><i data-lucide="bus" size="18"></i></button>
+                    <button onclick="setTravelMode('bike')" class="mode-btn" id="mode-bike"><i data-lucide="bike" size="18"></i></button>
+                    <button onclick="setTravelMode('walk')" class="mode-btn" id="mode-walk"><i data-lucide="person-standing" size="18"></i></button>
+                </div>
+
+                <div class="mb-4 pr-16">
+                    <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Destino</p>
+                    <p id="dest-name" class="text-white font-bold text-lg truncate">--</p>
+                </div>
             </div>
 
-            <div class="mb-4 pr-16">
-                <p class="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mb-1">Destino</p>
-                <p id="dest-name" class="text-white font-bold text-lg truncate">--</p>
-            </div>
-
-            <div id="cost-grid" class="grid grid-cols-2 gap-3 mb-4">
+            <!-- Dados Compartilhados da Viagem (Sempre Visíveis e Atualizados em Tempo Real) -->
+            <div id="trip-data-grid" class="grid grid-cols-2 gap-3 mb-4 pr-12">
                 <div class="cost-badge">
                     <p class="text-[9px] text-zinc-500 font-bold uppercase mb-1">Tempo Est.</p>
                     <p id="eta-val" class="font-black text-lg" style="color: var(--accent); transition: color 0.3s;">--</p>
@@ -711,6 +746,7 @@
                 </div>
             </div>
 
+            <!-- Botões de Navegação -->
             <div id="action-area">
                 <button onclick="toggleNav(true)" class="btn-action">Iniciar Navegação</button>
             </div>
@@ -733,11 +769,21 @@
         window.currentAuthUser = null;
         let lastSelectedReportId = null;
 
+        // Propriedades do PWA e Prompt de Tela Inicial
+        let deferredInstallPrompt = null;
+
+        // Configuração de snap, interpolação e GPS loss
+        let interpolatedPos = null; 
+        let lastGpsTimestamp = 0;
+        let signalLostMode = false;
+        let smoothAnimationId = null;
+
         let config = { 
             theme: 'auto', 
             vision: 'auto', 
             pathAlgo: 'fast', 
             uiColor: 'purple',
+            autoZoom: 'true', // Ativado por padrão
             reports: {
                 'Polícia': { alert: true, show: true },
                 'Perigo': { alert: true, show: true },
@@ -779,7 +825,7 @@
             saveConfig();
             
             if(userPos && map) {
-                 updateUserMarker(userPos, rotation, isNavigating);
+                 updateUserMarker(interpolatedPos || userPos, rotation, isNavigating);
             }
         }
 
@@ -1452,6 +1498,9 @@
                 document.getElementById('cfg-theme').value = config.theme;
                 document.getElementById('cfg-vision').value = config.vision;
                 document.getElementById('cfg-path-algo').value = config.pathAlgo || 'fast';
+                if(document.getElementById('cfg-auto-zoom')) {
+                    document.getElementById('cfg-auto-zoom').value = config.autoZoom || 'true';
+                }
             }
             
             if (config.uiColor) {
@@ -1465,6 +1514,7 @@
             config.theme = document.getElementById('cfg-theme').value;
             config.vision = document.getElementById('cfg-vision').value;
             config.pathAlgo = document.getElementById('cfg-path-algo').value;
+            config.autoZoom = document.getElementById('cfg-auto-zoom').value;
             localStorage.setItem('catsblock_cfg', JSON.stringify(config));
             applyTheme();
             updateVisionMode();
@@ -1500,6 +1550,7 @@
             }
         }
 
+        // Modificação de controle automático de Visão 2D / 3D baseado no Zoom ou Velocidade
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
             if (!isNavigating) {
@@ -1507,12 +1558,24 @@
                 return; 
             }
             
-            let pitch = Math.min(currentSpeed * 0.54, 65);
-            let translateY = Math.min(currentSpeed * 0.2, 25);
-            
-            if (userInteracting) {
+            const currentZoom = map.getZoom();
+            let is3D = true;
+
+            // Transição rápida e suave por nível de zoom
+            if (currentZoom <= 15) {
+                is3D = false;
+            } else if (config.vision === 'auto') {
+                // Em modo automático, ativa 3D apenas em velocidades acima de 30km/h
+                if (currentSpeed < 30) {
+                    is3D = false;
+                }
+            }
+
+            if (!is3D || userInteracting) {
                 mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
             } else {
+                let pitch = Math.min(Math.max(currentSpeed * 0.6, 45), 65);
+                let translateY = Math.min(currentSpeed * 0.2, 25);
                 mapEl.style.transform = `translateY(-${translateY}%) rotateX(${pitch}deg)`;
             }
         }
@@ -1530,6 +1593,146 @@
                 synth.cancel();
                 synth.speak(ut);
             } catch (e) { document.getElementById('inst-text').innerText = text; }
+        }
+
+        // Funções de Gerenciamento do Banner PWA (Adicionar à Tela Inicial)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            
+            // Verifica se o usuário já escolheu "Não" anteriormente
+            const pwaStatus = localStorage.getItem('pwa_prompt_dismissed');
+            if (pwaStatus !== 'true') {
+                document.getElementById('pwa-prompt-card').style.display = 'flex';
+                document.getElementById('pwa-prompt-card').classList.remove('hidden');
+            }
+        });
+
+        function dismissPwaPrompt(savePreference) {
+            document.getElementById('pwa-prompt-card').style.display = 'none';
+            document.getElementById('pwa-prompt-card').classList.add('hidden');
+            if (savePreference) {
+                localStorage.setItem('pwa_prompt_dismissed', 'true');
+            }
+        }
+
+        async function triggerPwaInstall() {
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                const { outcome } = await deferredInstallPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    localStorage.setItem('pwa_prompt_dismissed', 'true');
+                }
+                deferredInstallPrompt = null;
+                dismissPwaPrompt(false);
+            } else {
+                // Fallback amigável caso não suporte prompt direto
+                alert("Para instalar em seu aparelho, acesse as opções do navegador e selecione 'Adicionar à tela de início'.");
+                dismissPwaPrompt(true);
+            }
+        }
+
+        // Suporte PWA standalone para rodar em tela cheia sem barras de navegação do browser
+        if (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches) {
+            // Se já estiver rodando como standalone, garante a ocultação de qualquer banner
+            dismissPwaPrompt(false);
+        }
+
+        // Lógica de Minimização e Expansão do Card de Viagem Ativa
+        function toggleTripMinimize(minimize) {
+            const innerCard = document.getElementById('trip-card-inner');
+            const nonNavGroup = document.getElementById('trip-non-nav-group');
+            const actArea = document.getElementById('action-area');
+            const btnMin = document.getElementById('btn-minimize-trip');
+            const btnExp = document.getElementById('btn-expand-trip');
+            const speedUI = document.getElementById('speed-ui');
+            const reportBtn = document.getElementById('report-trigger-btn');
+
+            if (minimize) {
+                innerCard.style.padding = '14px 18px';
+                nonNavGroup.style.display = 'none';
+                actArea.style.display = 'none';
+                btnMin.classList.add('hidden');
+                btnExp.classList.remove('hidden');
+                
+                speedUI.className = 'speed-badge ui-lift-minimized';
+                reportBtn.className = 'ui-lift-minimized';
+                reportBtn.style.bottom = '25px';
+            } else {
+                innerCard.style.padding = '20px';
+                nonNavGroup.style.display = 'block';
+                actArea.style.display = 'block';
+                btnMin.classList.remove('hidden');
+                btnExp.classList.add('hidden');
+                
+                speedUI.className = 'speed-badge ui-lift-active';
+                reportBtn.className = 'ui-lift-active';
+                reportBtn.style.bottom = '25px';
+            }
+            lucide.createIcons();
+        }
+
+        // Função de cálculo de Snap e Autonomia de Navegação Suave
+        function smoothAnimationTick() {
+            if (!isNavigating || !userPos) {
+                smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
+                return;
+            }
+
+            const now = performance.now();
+            const timePassed = now - lastGpsTimestamp;
+
+            // Se o GPS falhar temporariamente por mais de 4 segundos, simular posição autônoma (Dead Reckoning)
+            if (timePassed > 4000 && currentSpeed > 5 && routingControl && routingControl._selectedRoute) {
+                signalLostMode = true;
+                const pathCoords = routingControl._selectedRoute.coordinates;
+                
+                // Encontrar o ponto atual correspondente no mapa e avançar de acordo com a velocidade
+                let closestIdx = 0;
+                let minDist = Infinity;
+                for (let i = 0; i < pathCoords.length; i++) {
+                    let d = getDistance(interpolatedPos, [pathCoords[i].lat, pathCoords[i].lng]);
+                    if (d < minDist) { minDist = d; closestIdx = i; }
+                }
+
+                // Estimar novo deslocamento autônomo baseado no vetor de velocidade por segundo
+                const mPerSec = currentSpeed / 3.6;
+                const distToMove = mPerSec * 0.016; // 16ms aprox por frame
+                
+                let currentAccumulated = 0;
+                let targetIdx = closestIdx;
+                for (let j = closestIdx; j < pathCoords.length - 1; j++) {
+                    let segmentDist = getDistance([pathCoords[j].lat, pathCoords[j].lng], [pathCoords[j+1].lat, pathCoords[j+1].lng]);
+                    currentAccumulated += segmentDist;
+                    if (currentAccumulated >= distToMove) {
+                        targetIdx = j + 1;
+                        break;
+                    }
+                }
+
+                if (targetIdx !== closestIdx) {
+                    interpolatedPos = [pathCoords[targetIdx].lat, pathCoords[targetIdx].lng];
+                }
+            }
+
+            // Mover visualmente o cursor em direção à posição de destino de forma fluida (Interpolação de amortecimento)
+            if (interpolatedPos) {
+                const lerpFactor = signalLostMode ? 0.04 : 0.09;
+                let currentLat = interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor;
+                let currentLng = interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor;
+                interpolatedPos = [currentLat, currentLng];
+
+                // Manter Seta Visual Atualizada no Canvas
+                updateUserMarker(interpolatedPos, rotation, isNavigating);
+
+                // Forçar foco de câmera contínuo e suave
+                if (isFocusedMode && !userInteracting) {
+                    map.panTo(interpolatedPos, { animate: false });
+                    updateVisionMode();
+                }
+            }
+
+            smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
         }
 
         lucide.createIcons();
@@ -1556,6 +1759,7 @@
 
         function init(lat, lng) {
             userPos = [lat, lng];
+            interpolatedPos = [lat, lng];
             if (map) return; 
 
             map = L.map('map', { 
@@ -1564,12 +1768,14 @@
                 inertia: false,
                 zoomAnimation: false, 
                 minZoom: 13,
-                maxZoom: 20
+                maxZoom: 20 // Zoom máximo original preservado em 20
             }).setView(userPos, 19);
 
+            // Transição suave de Visão baseada em alteração de Zoom
             map.on('zoomend', () => {
                 renderFilteredReports();
                 fetchAlerts();
+                updateVisionMode();
             });
 
             tileLayer = L.tileLayer('', {
@@ -1613,9 +1819,8 @@
                     if (isNavigating) {
                         userInteracting = false;
                         isFocusedMode = true;
-                        if(userPos && map) {
-                            const exactPos = userMarker ? userMarker.getLatLng() : userPos;
-                            map.panTo(exactPos, { animate: false });
+                        if(interpolatedPos && map) {
+                            map.panTo(interpolatedPos, { animate: false });
                         }
                         updateVisionMode();
                     }
@@ -1626,26 +1831,67 @@
             map.on('moveend dragend touchend mouseup zoomend', startFocusTimer);
             startFocusTimer(); 
 
+            // Ativa o loop contínuo de interpolação
+            smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
+
             navigator.geolocation.watchPosition(pos => {
                 const coords = [pos.coords.latitude, pos.coords.longitude];
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
+                
+                // Gerenciamento de reconexão de sinal GPS (Deslizar suave passando por tudo até a nova posição real)
+                if (signalLostMode) {
+                    signalLostMode = false;
+                    // Força a seta a deslizar rapidamente a partir do local atual da simulação até o ponto real
+                    interpolatedPos = [interpolatedPos[0], interpolatedPos[1]];
+                }
+                lastGpsTimestamp = performance.now();
+
+                // Lógica de Zoom Automático Baseado em Velocidade (Limite máximo estrito de zoom a 16)
+                if (isNavigating && config.autoZoom === 'true') {
+                    let calculatedZoom = 19; // Zoom inicial em baixa velocidade
+                    if (currentSpeed >= 40) {
+                        calculatedZoom = 15;
+                    } else if (currentSpeed >= 20) {
+                        calculatedZoom = 17;
+                    }
+                    // Limita a escala máxima permitida pelo autozoom para 16
+                    let finalZoom = Math.min(calculatedZoom, 16);
+                    if (map.getZoom() !== finalZoom && !userInteracting) {
+                        map.setZoom(finalZoom, { animate: true });
+                    }
+                }
+
+                // Detector estrito de desvios do trajeto ativo para recalcular rota
+                if (isNavigating && routingControl && routingControl._selectedRoute) {
+                    const pathCoords = routingControl._selectedRoute.coordinates;
+                    let isUserOnTrack = false;
+                    for (let i = 0; i < pathCoords.length; i++) {
+                        const d = getDistance(coords, [pathCoords[i].lat, pathCoords[i].lng]);
+                        if (d <= 30) {
+                            isUserOnTrack = true;
+                            break;
+                        }
+                    }
+
+                    // Se o usuário desviar do traçado, recalcula dinamicamente em segundo plano
+                    if (!isUserOnTrack) {
+                        console.log("Desvio detectado. Recalculando rota...");
+                        setDest(destinationLatLng, L.latLng(coords));
+                    }
+                }
                 
                 if (!lastApiPos || getDistance(coords, lastApiPos) > 10) {
                     fetchAlerts();
                     lastApiPos = coords;
                 }
 
+                userPos = coords;
                 checkNearbyReports(coords);
                 animate(coords);
                 
                 if (isNavigating) {
                     updateNavigation();
-                    if(isFocusedMode && !userInteracting) {
-                        const exactPos = userMarker ? userMarker.getLatLng() : userPos;
-                        map.panTo(exactPos, { animate: false });
-                        updateVisionMode();
-                    }
                 }
                 prevPos = coords;
             }, null, { enableHighAccuracy: true });
@@ -1794,7 +2040,7 @@
                 rotation += diff * 0.4; 
                 userPos = finalCoords;
                 
-                updateUserMarker(userPos, rotation, isNavigating);
+                updateUserMarker(interpolatedPos || userPos, rotation, isNavigating);
                 
                 if (isNavigating && !userInteracting && isFocusedMode) {
                     const exactPos = userMarker ? userMarker.getLatLng() : userPos;
@@ -1869,6 +2115,8 @@
                 const route = e.routes[0];
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
+                
+                // Atualizações em tempo real do frame
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
                 const ev = document.getElementById('extra-info-val');
@@ -1903,7 +2151,10 @@
             isNavigating = start;
             document.getElementById('search-card').style.display = start ? 'none' : 'block';
             document.getElementById('instruction-panel').style.display = start ? 'flex' : 'none';
-            document.getElementById('mode-selector').style.display = start ? 'none' : 'flex';
+            
+            // Controle de simplificação do frame de viagem maior/expandido
+            document.getElementById('trip-non-nav-group').style.display = start ? 'none' : 'block';
+            
             document.getElementById('settings-btn').classList.toggle('settings-nav-active', start);
             document.getElementById('action-area').innerHTML = start ? 
                 `<button onclick="toggleNav(false)" class="btn-action btn-stop">Parar Viagem</button>` : 
@@ -1922,6 +2173,7 @@
                 clearSelection(); 
                 updateVisionMode(); 
                 isFocusedMode = false;
+                toggleTripMinimize(false); // Retorna o card de viagem para o padrão visível ao cancelar
             }
         }
 
