@@ -1567,41 +1567,41 @@
             }
         }
 
-        // Modificação de 3D real perfeitamente renderizado com CSS Transitions desabilitados
+        // Correção definitiva do modo 3D e regras de transição baseadas em configuração e remoção dos saltos indesejados
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
             if (!isNavigating) {
-                mapEl.style.transform = `rotateX(0deg) translateY(0%) rotateZ(0deg)`;
-                mapEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
+                mapEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
                 return; 
             }
             
-            const currentZoom = map.getZoom();
-            let is3D = true;
+            let is3D = false;
 
-            // Ajuste instantâneo de limites de perspectiva baseado no zoom
-            if (currentZoom <= 15) {
-                is3D = false; // Zoom <= 15 força 2D instantâneo
-            } else if (currentZoom >= 16) {
-                if (config.vision === 'auto') {
-                    // No modo automático, a transição para 3D só ocorre se a velocidade atingir 30km/h ou mais
-                    if (currentSpeed < 30) {
-                        is3D = false;
-                    }
+            if (config.vision === '3d') {
+                is3D = true; // 3D força o modo permanentemente
+            } else if (config.vision === '2d') {
+                is3D = false; // 2D força o modo permanentemente
+            } else {
+                // Modo automático: Apenas a velocidade de >=30km/h aciona o 3D (limite de zoom que sobreescrevia regras foi removido)
+                if (currentSpeed >= 30) {
+                    is3D = true;
+                } else {
+                    is3D = false;
                 }
             }
 
             if (!is3D || userInteracting) {
-                mapEl.style.transform = `rotateX(0deg) translateY(0%) rotateZ(0deg)`;
-                mapEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
+                // Transição suave restaurada para impedir flickering e saltos indesejados nas trocas entre estados
+                mapEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
             } else {
                 let pitch = Math.min(Math.max(currentSpeed * 0.6, 45), 65);
                 let translateY = 25; // Mantém a câmera inclinada com a seta na parte inferior do frame
                 
-                // Desabilita transições CSS no container para impedir engasgos contra as renderizações do RequestAnimationFrame
-                mapEl.style.transition = 'none'; 
-                // Aplica 3D autêntico alterando perspectiva de Heading e Bearing
-                mapEl.style.transform = `translateY(${translateY}%) rotateX(${pitch}deg) rotateZ(${-rotation}deg)`;
+                mapEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)'; 
+                // Apenas pitch (rotateX) e offset, sem a rotação quebrada do container (rotateZ) que gerava os vazios
+                mapEl.style.transform = `translateY(${translateY}%) rotateX(${pitch}deg)`;
             }
         }
 
