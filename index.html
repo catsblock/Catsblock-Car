@@ -100,17 +100,16 @@
         }
         
         #map { 
-            height: 200%; 
-            width: 200%; 
+            /* Aumentado radicalmente para cobrir longas distâncias com o 3D sem deixar vazios pretos */
+            height: 300%; 
+            width: 300%; 
             position: absolute;
-            top: -50%;
-            left: -50%;
+            top: -100%;
+            left: -100%;
             z-index: 1; 
             transform-style: preserve-3d;
-            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); 
+            will-change: transform;
         }
-
-        .map-3d-active { transform-origin: center center; }
 
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
         .ui-container * { pointer-events: auto; }
@@ -213,6 +212,7 @@
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
         }
         
         .nav-arrow-svg {
@@ -624,7 +624,14 @@
                     <option value="3d">3D</option>
                 </select>
             </div>
-            <!-- Opção de Ajuste do Zoom Automático baseado em velocidade -->
+            <div class="config-row">
+                <span>Tamanho da Seta</span>
+                <select id="cfg-arrow-size" class="config-select" onchange="saveConfig()">
+                    <option value="normal">Normal</option>
+                    <option value="small">Pequeno</option>
+                    <option value="large">Maior</option>
+                </select>
+            </div>
             <div class="config-row">
                 <span>Zoom Automático</span>
                 <select id="cfg-auto-zoom" class="config-select" onchange="saveConfig()">
@@ -782,12 +789,15 @@
         let lastGpsTimestamp = 0;
         let signalLostMode = false;
         let smoothAnimationId = null;
+        
+        let is3DModeActive = false; // Flag para monitorar transição de plugin 3d
 
         let config = { 
             theme: 'auto', 
             vision: 'auto', 
             pathAlgo: 'fast', 
             uiColor: 'purple',
+            arrowSize: 'normal',
             autoZoom: 'true', // Ativado por padrão
             reports: {
                 'Polícia': { alert: true, show: true },
@@ -822,6 +832,24 @@
 
         const colorMap = { purple: '#A855F7', blue: '#3b82f6', green: '#22c55e', gray: '#71717a', red: '#ef4444' };
         
+        // --- PLUGIN 3D NATIVO: Extensão Leaflet para Perspectiva Estendida e Limpa ---
+        L.Perspective3D = L.Class.extend({
+            initialize: function(mapInstance) {
+                this._map = mapInstance;
+                this._container = mapInstance.getContainer();
+            },
+            enable3D: function() {
+                // Aumenta visão periférica e cria o efeito de câmera deitada limpando engasgos
+                this._container.style.transition = 'transform 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
+                this._container.style.transform = 'translateY(25%) rotateX(65deg)';
+            },
+            disable3D: function() {
+                // Retorna ao 2D padrão 
+                this._container.style.transition = 'transform 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
+                this._container.style.transform = 'rotateX(0deg) translateY(0%)';
+            }
+        });
+
         function setAppColor(color) {
             config.uiColor = color;
             document.documentElement.style.setProperty('--accent', colorMap[color]);
@@ -1512,12 +1540,11 @@
                 const parsed = JSON.parse(saved);
                 config = { ...config, ...parsed };
                 
-                document.getElementById('cfg-theme').value = config.theme;
-                document.getElementById('cfg-vision').value = config.vision;
-                document.getElementById('cfg-path-algo').value = config.pathAlgo || 'fast';
-                if(document.getElementById('cfg-auto-zoom')) {
-                    document.getElementById('cfg-auto-zoom').value = config.autoZoom || 'true';
-                }
+                if (document.getElementById('cfg-theme')) document.getElementById('cfg-theme').value = config.theme;
+                if (document.getElementById('cfg-vision')) document.getElementById('cfg-vision').value = config.vision;
+                if (document.getElementById('cfg-path-algo')) document.getElementById('cfg-path-algo').value = config.pathAlgo || 'fast';
+                if (document.getElementById('cfg-auto-zoom')) document.getElementById('cfg-auto-zoom').value = config.autoZoom || 'true';
+                if (document.getElementById('cfg-arrow-size')) document.getElementById('cfg-arrow-size').value = config.arrowSize || 'normal';
             }
             
             if (config.uiColor) {
@@ -1532,9 +1559,15 @@
             config.vision = document.getElementById('cfg-vision').value;
             config.pathAlgo = document.getElementById('cfg-path-algo').value;
             config.autoZoom = document.getElementById('cfg-auto-zoom').value;
+            config.arrowSize = document.getElementById('cfg-arrow-size').value;
             localStorage.setItem('catsblock_cfg', JSON.stringify(config));
+            
             applyTheme();
             updateVisionMode();
+            
+            if (userPos && map) {
+                updateUserMarker(interpolatedPos || userPos, window.frozenRotation || rotation, isNavigating);
+            }
             if (destinationLatLng) setDest(destinationLatLng); 
         }
 
@@ -1567,41 +1600,46 @@
             }
         }
 
-        // Correção definitiva do modo 3D e regras de transição baseadas em configuração e remoção dos saltos indesejados
+        // Lógica Exaustiva e Blindada contra Glitches Visuais na Transição e Foco 3D
         function updateVisionMode() {
-            const mapEl = document.getElementById('map');
-            if (!isNavigating) {
-                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
-                mapEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+            if (!isNavigating || !map) {
+                if(is3DModeActive) {
+                    map.perspective3D.disable3D();
+                    is3DModeActive = false;
+                }
                 return; 
             }
             
-            let is3D = false;
+            let shouldBe3D = false;
 
+            // Restauração das lógicas base requisitadas
             if (config.vision === '3d') {
-                is3D = true; // 3D força o modo permanentemente
+                shouldBe3D = true; // 3D força o modo permanentemente
             } else if (config.vision === '2d') {
-                is3D = false; // 2D força o modo permanentemente
+                shouldBe3D = false; // 2D força o modo permanentemente
             } else {
-                // Modo automático: Apenas a velocidade de >=30km/h aciona o 3D (limite de zoom que sobreescrevia regras foi removido)
+                // Modo automático Hysteresis (Impede que as velocidades 28-30km gerem saltos pisquentes frequentes na UI)
                 if (currentSpeed >= 30) {
-                    is3D = true;
+                    shouldBe3D = true;
+                } else if (currentSpeed < 25) {
+                    shouldBe3D = false;
                 } else {
-                    is3D = false;
+                    shouldBe3D = is3DModeActive; // Mantém a decisão prévia caso caia na velocidade limiar
                 }
             }
 
-            if (!is3D || userInteracting) {
-                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
-                // Transição suave restaurada para impedir flickering e saltos indesejados nas trocas entre estados
-                mapEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
-            } else {
-                let pitch = Math.min(Math.max(currentSpeed * 0.6, 45), 65);
-                let translateY = 25; // Mantém a câmera inclinada com a seta na parte inferior do frame
-                
-                mapEl.style.transition = 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)'; 
-                // Apenas pitch (rotateX) e offset, sem a rotação quebrada do container (rotateZ) que gerava os vazios
-                mapEl.style.transform = `translateY(${translateY}%) rotateX(${pitch}deg)`;
+            if (userInteracting) {
+                shouldBe3D = false;
+            }
+
+            // O debounce evita a re-cálculo da transição em tempo real (removendo trepidações baseadas em rotação ou pitch flutuante)
+            if (shouldBe3D !== is3DModeActive) {
+                if (shouldBe3D) {
+                    map.perspective3D.enable3D();
+                } else {
+                    map.perspective3D.disable3D();
+                }
+                is3DModeActive = shouldBe3D;
             }
         }
 
@@ -1736,8 +1774,10 @@
                     if (targetIdx !== closestIdx) {
                         // Modifica a rotação gradativamente caso a adivinhação preveja uma rua de curva ou cruzamento
                         let angle = Math.atan2(pathCoords[targetIdx].lng - interpolatedPos[1], pathCoords[targetIdx].lat - interpolatedPos[0]) * 180 / Math.PI;
-                        let diff = ((angle - rotation) % 360 + 540) % 360 - 180;
-                        rotation += diff * 0.05; 
+                        if (!isNaN(angle)) {
+                            let diff = ((angle - rotation) % 360 + 540) % 360 - 180;
+                            rotation += diff * 0.05; 
+                        }
                         
                         interpolatedPos = [
                             interpolatedPos[0] + (pathCoords[targetIdx].lat - interpolatedPos[0]) * 0.05,
@@ -1772,7 +1812,6 @@
 
                 if (isFocusedMode && !userInteracting) {
                     map.panTo(interpolatedPos, { animate: false });
-                    updateVisionMode();
                 }
 
                 // Apagamento imediato da linha de rota pelo rastro da seta
@@ -1790,7 +1829,6 @@
                 
                 if (isFocusedMode && !userInteracting) {
                     map.panTo(interpolatedPos, { animate: false });
-                    updateVisionMode(); // Garantir que a renderização do fundo corresponda as perspectivas da tela real
                 }
             }
 
@@ -1851,20 +1889,24 @@
             interpolatedPos = [lat, lng];
             if (map) return; 
 
+            // KeepBuffer incrementado brutalmente para 18 cobrindo de maneira segura o load the Tiles além da área visível no zoom 3D.
             map = L.map('map', { 
                 zoomControl: false, 
                 attributionControl: false, 
                 inertia: false,
                 zoomAnimation: false, 
                 minZoom: 13,
-                maxZoom: 20 // Preserva o limite máximo global original
+                maxZoom: 20,
+                keepBuffer: 18, 
+                updateWhenZooming: false
             }).setView(userPos, 19);
+            
+            map.perspective3D = new L.Perspective3D(map);
 
             // Transição suave de Visão baseada em alteração de Zoom
             map.on('zoomend', () => {
                 renderFilteredReports();
                 fetchAlerts();
-                updateVisionMode();
             });
 
             tileLayer = L.tileLayer('', {
@@ -1982,7 +2024,9 @@
                 checkNearbyReports(coords);
                 animate(coords); // Chama o renderizador que processará puramente apenas as rotações das setas visuais
                 
+                // Sempre que atualizar a velocidade, atualizamos a máquina de estados para evitar falhas visuais ao mudar pro modo automático do 3d
                 if (isNavigating) {
+                    updateVisionMode();
                     updateNavigation();
                 }
                 prevPos = coords;
@@ -2112,23 +2156,38 @@
                         if (nextIdx !== closestIdx) {
                             const p1 = coords[closestIdx];
                             const p2 = coords[nextIdx];
-                            let angle = Math.atan2(p2.lng - p1.lng, p2.lat - p1.lat) * 180 / Math.PI;
-                            dynamicRotation = angle; 
+                            const dMove = getDistance([p1.lat, p1.lng], [p2.lat, p2.lng]);
+                            
+                            // Bloqueio rigoroso de rotação louca baseada em microlixos de dados (só roda se moveu mais de 2 metros)
+                            if(dMove > 2) {
+                                let angle = Math.atan2(p2.lng - p1.lng, p2.lat - p1.lat) * 180 / Math.PI;
+                                dynamicRotation = angle; 
+                            }
                         }
                     } else if (prevPos) {
-                        let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
-                        dynamicRotation = angle; 
+                        const dMove = getDistance(target, start);
+                        if(dMove > 2) {
+                            let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
+                            dynamicRotation = angle; 
+                        }
                     }
                 } else if (prevPos) {
                     const dMove = getDistance(target, start);
-                    if (dMove > 0.05) { 
+                    // O filtro superior evita giros caóticos se a tela travar de forma ínfima em algum buraco visual.
+                    if (dMove > 2) { 
                         let angle = Math.atan2(target[1] - start[1], target[0] - start[0]) * 180 / Math.PI;
                         dynamicRotation = angle; 
                     }
                 }
                 
                 let diff = ((dynamicRotation - rotation) % 360 + 540) % 360 - 180;
-                rotation += diff * 0.45; // Suavização pura de cálculos esféricos sem comprometer dados brutos de userPos
+                
+                // Amortecimento fixado sem ultrapassar os limites matemáticos
+                if(Math.abs(diff) > 130) {
+                     rotation = dynamicRotation; // Se a diferença virar as costas estala de forma imediata evitando um turbilhão no peão (giro do pino).
+                } else {
+                     rotation += diff * 0.15;
+                }
                 
                 if (p < 1) requestAnimationFrame(frame);
             }
@@ -2150,9 +2209,12 @@
             const inner = document.getElementById('marker-inner');
             if (inner) {
                 let arrowVisualRotation = rot;
+                
+                let arrowScales = { 'small': 0.7, 'normal': 1, 'large': 1.5 };
+                let activeScale = arrowScales[config.arrowSize || 'normal'];
 
                 inner.innerHTML = asArrow ? 
-                    `<div class="arrow-wrapper mx-auto mt-[8px]">
+                    `<div class="arrow-wrapper mx-auto mt-[8px]" style="transform: scale(${activeScale}); transition: transform 0.1s linear;">
                         <svg class="nav-arrow-svg" style="transform: rotate(${arrowVisualRotation}deg); transition: none;" viewBox="0 0 100 100">
                             <path d="M50 10 L85 85 L50 70 L15 85 Z"/>
                         </svg>
