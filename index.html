@@ -2,18 +2,22 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- Meta tags estritas para modo PWA (Aplicativo Nativo na Tela Inicial) -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CatsBlock Car">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href='data:application/manifest+json,{"name":"CatsBlock Car","short_name":"CatsBlock","display":"standalone","start_url":".","background_color":"#000000","theme_color":"#000000"}'>
+    
     <title>CatsBlock Car</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- PWA Manifest & Meta Tags para simular app nativo no celular -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="CatsBlock Car">
     
     <!-- Firebase SDKs -->
     <script type="module">
@@ -102,6 +106,7 @@
             top: -50%;
             left: -50%;
             z-index: 1; 
+            transform-style: preserve-3d;
             transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); 
         }
 
@@ -772,7 +777,7 @@
         // Propriedades do PWA e Prompt de Tela Inicial
         let deferredInstallPrompt = null;
 
-        // Configuração de snap, interpolação e GPS loss
+        // Configuração de snap, interpolação preditiva e Waze GPS loss anti-teleporte
         let interpolatedPos = null; 
         let lastGpsTimestamp = 0;
         let signalLostMode = false;
@@ -825,7 +830,7 @@
             saveConfig();
             
             if(userPos && map) {
-                 updateUserMarker(interpolatedPos || userPos, rotation, isNavigating);
+                 updateUserMarker(interpolatedPos || userPos, window.frozenRotation || rotation, isNavigating);
             }
         }
 
@@ -1302,7 +1307,6 @@
             }
         }
 
-        // Correção de radar: Alerta dinâmico disparado ANTES de alcançar o radar
         function handleProximityLogic(coords) {
             if (!isNavigating) {
                 closeProximityAlert();
@@ -1563,11 +1567,12 @@
             }
         }
 
-        // Modificação de controle automático de Visão 2D / 3D baseado no Zoom ou Velocidade
+        // Modificação de 3D real perfeitamente renderizado com CSS Transitions desabilitados
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
             if (!isNavigating) {
-                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
+                mapEl.style.transform = `rotateX(0deg) translateY(0%) rotateZ(0deg)`;
+                mapEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
                 return; 
             }
             
@@ -1587,11 +1592,16 @@
             }
 
             if (!is3D || userInteracting) {
-                mapEl.style.transform = `rotateX(0deg) translateY(0%)`;
+                mapEl.style.transform = `rotateX(0deg) translateY(0%) rotateZ(0deg)`;
+                mapEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
             } else {
                 let pitch = Math.min(Math.max(currentSpeed * 0.6, 45), 65);
-                let translateY = Math.min(currentSpeed * 0.2, 25);
-                mapEl.style.transform = `translateY(-${translateY}%) rotateX(${pitch}deg)`;
+                let translateY = 25; // Mantém a câmera inclinada com a seta na parte inferior do frame
+                
+                // Desabilita transições CSS no container para impedir engasgos contra as renderizações do RequestAnimationFrame
+                mapEl.style.transition = 'none'; 
+                // Aplica 3D autêntico alterando perspectiva de Heading e Bearing
+                mapEl.style.transform = `translateY(${translateY}%) rotateX(${pitch}deg) rotateZ(${-rotation}deg)`;
             }
         }
 
@@ -1683,102 +1693,135 @@
             lucide.createIcons();
         }
 
-        // Correção de engasgo e suavização da seta (Movimento contínuo ininterrupto 100% fluido)
+        // Sistema Waze Anti-Teleportes, Previsão de Falhas, e Continuidade Fluida em Qualquer Situação
         function smoothAnimationTick() {
-            if (!isNavigating || !userPos) {
+            // Continua atualizando a animação visual sempre que tivermos sinal (independente de estar navegando)
+            if (!userPos) {
                 smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
                 return;
             }
 
             const now = performance.now();
             const timePassed = now - lastGpsTimestamp;
+            let isCorrectingPredictiveError = window.isCorrectingPredictiveError || false;
 
-            // Se o GPS falhar temporariamente, simular posição autônoma coerente
-            if (timePassed > 4000 && currentSpeed > 5 && routingControl && routingControl._selectedRoute) {
-                signalLostMode = true;
-                const pathCoords = routingControl._selectedRoute.coordinates;
-                
-                let closestIdx = 0;
-                let minDist = Infinity;
-                for (let i = 0; i < pathCoords.length; i++) {
-                    let d = getDistance(interpolatedPos, [pathCoords[i].lat, pathCoords[i].lng]);
-                    if (d < minDist) { minDist = d; closestIdx = i; }
-                }
-
-                const mPerSec = currentSpeed / 3.6;
-                const distToMove = mPerSec * 0.016; // Avanço autônomo baseado no delta frame
-                
-                let currentAccumulated = 0;
-                let targetIdx = closestIdx;
-                for (let j = closestIdx; j < pathCoords.length - 1; j++) {
-                    let segmentDist = getDistance([pathCoords[j].lat, pathCoords[j].lng], [pathCoords[j+1].lat, pathCoords[j+1].lng]);
-                    currentAccumulated += segmentDist;
-                    if (currentAccumulated >= distToMove) {
-                        targetIdx = j + 1;
-                        break;
+            if (isNavigating) {
+                // Adivinhação Preditiva: Se a rede travar ou GPS pular (> 1.2s sem atualização), o mapa antecipa.
+                if (timePassed > 1200 && currentSpeed > 2 && routingControl && routingControl._selectedRoute) {
+                    signalLostMode = true;
+                    
+                    const mPerSec = Math.max(currentSpeed / 3.6, 2); // Mantém o carro vivo movendo-se
+                    const deltaSec = 0.016; // Tempo entre ticks do display frame (60Hz aproximado)
+                    const distToMove = mPerSec * deltaSec * 0.8; // Velocidade reduzida para adivinhar a trajetória (80%)
+                    
+                    const pathCoords = routingControl._selectedRoute.coordinates;
+                    let closestIdx = 0;
+                    let minDist = Infinity;
+                    for (let i = 0; i < pathCoords.length; i++) {
+                        let d = getDistance(interpolatedPos, [pathCoords[i].lat, pathCoords[i].lng]);
+                        if (d < minDist) { minDist = d; closestIdx = i; }
                     }
+
+                    let currentAccumulated = 0;
+                    let targetIdx = closestIdx;
+                    for (let j = closestIdx; j < pathCoords.length - 1; j++) {
+                        let segmentDist = getDistance([pathCoords[j].lat, pathCoords[j].lng], [pathCoords[j+1].lat, pathCoords[j+1].lng]);
+                        currentAccumulated += segmentDist;
+                        if (currentAccumulated >= distToMove) {
+                            targetIdx = j + 1;
+                            break;
+                        }
+                    }
+
+                    if (targetIdx !== closestIdx) {
+                        // Modifica a rotação gradativamente caso a adivinhação preveja uma rua de curva ou cruzamento
+                        let angle = Math.atan2(pathCoords[targetIdx].lng - interpolatedPos[1], pathCoords[targetIdx].lat - interpolatedPos[0]) * 180 / Math.PI;
+                        let diff = ((angle - rotation) % 360 + 540) % 360 - 180;
+                        rotation += diff * 0.05; 
+                        
+                        interpolatedPos = [
+                            interpolatedPos[0] + (pathCoords[targetIdx].lat - interpolatedPos[0]) * 0.05,
+                            interpolatedPos[1] + (pathCoords[targetIdx].lng - interpolatedPos[1]) * 0.05
+                        ];
+                    }
+                } else {
+                    let distToReal = getDistance(interpolatedPos, userPos);
+                    let lerpFactor = 0.08;
+                    
+                    // Se estiver consertando um erro preditivo: desliza 100% diretamente pra a coordeanda do GPS de forma incisiva e super rápida
+                    if (isCorrectingPredictiveError) {
+                        lerpFactor = 0.25; 
+                        if (distToReal < 3) {
+                            window.isCorrectingPredictiveError = false; 
+                            isCorrectingPredictiveError = false;
+                        }
+                    } else {
+                        // Ajuste Dinâmico Anti-Teleporte: Se a seta estiver adiantada em relação ao GPS brutal, sutilmente freia
+                        lerpFactor = distToReal < 8 ? 0.03 : 0.08;
+                    }
+
+                    interpolatedPos = [
+                        interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor,
+                        interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor
+                    ];
                 }
 
-                if (targetIdx !== closestIdx) {
-                    interpolatedPos = [pathCoords[targetIdx].lat, pathCoords[targetIdx].lng];
-                }
-            }
+                // Renderiza a rotação da seta visual de forma ininterrupta, congelando apenas quando em modo preditivo de correção
+                updateUserMarker(interpolatedPos, isCorrectingPredictiveError ? window.frozenRotation : rotation, true);
+                if (!isCorrectingPredictiveError) window.frozenRotation = rotation;
 
-            // Movimentação da seta em tempo real sem micro-pausas e engasgos de processamento
-            if (interpolatedPos) {
-                // Cálculo de interpolação linear sem paradas para suavizar atualizações de coordenadas
-                const lerpFactor = signalLostMode ? 0.05 : 0.08;
-                let currentLat = interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor;
-                let currentLng = interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor;
-                interpolatedPos = [currentLat, currentLng];
-
-                // Manter Seta Visual Atualizada com transição contínua
-                updateUserMarker(interpolatedPos, rotation, isNavigating);
-
-                // Forçar foco de câmera nativo e ininterrupto se o usuário não estiver manipulando a tela
                 if (isFocusedMode && !userInteracting) {
                     map.panTo(interpolatedPos, { animate: false });
                     updateVisionMode();
                 }
 
-                // Apagamento dinâmico e suave das linhas do caminho percorrido que ficaram para trás
+                // Apagamento imediato da linha de rota pelo rastro da seta
                 updatePathFadeEffect(interpolatedPos);
+                
+            } else {
+                // Modo Bolinha: Continua a processar suavização e tracking sem travar o mapa, corrigindo o loop
+                let distToReal = getDistance(interpolatedPos, userPos);
+                let lerpFactor = distToReal > 15 ? 0.2 : 0.08;
+                interpolatedPos = [
+                    interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor,
+                    interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor
+                ];
+                updateUserMarker(interpolatedPos, 0, false);
+                
+                if (isFocusedMode && !userInteracting) {
+                    map.panTo(interpolatedPos, { animate: false });
+                    updateVisionMode(); // Garantir que a renderização do fundo corresponda as perspectivas da tela real
+                }
             }
 
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
         }
 
-        // Lógica de apagamento suave do traçado conforme o carro avança na rota
+        // Lógica aprimorada de apagamento quase instantâneo do traçado conforme o carro avança na rota limpa
         function updatePathFadeEffect(currentCoords) {
             if (!routingControl || !routingControl._selectedRoute || !routingControl._line) return;
             
-            // Localiza o ponto mais próximo do traçado atual para remover segmentos que ficaram para trás
             try {
                 const line = routingControl._line;
-                const origLatLngs = routingControl._selectedRoute.coordinates;
-                let closestIdx = 0;
-                let minDist = Infinity;
+                let latLngs = line.getLatLngs();
+                if (!latLngs || latLngs.length < 2) return;
                 
-                for (let i = 0; i < origLatLngs.length; i++) {
-                    let d = getDistance(currentCoords, [origLatLngs[i].lat, origLatLngs[i].lng]);
+                let minDist = Infinity;
+                let closestIdx = 0;
+                
+                for (let i = 0; i < latLngs.length; i++) {
+                    let d = getDistance(currentCoords, [latLngs[i].lat, latLngs[i].lng]);
                     if (d < minDist) {
                         minDist = d;
                         closestIdx = i;
                     }
                 }
                 
-                // Se já avançamos, remove os pontos passados do traçado principal e atualiza a polyline no mapa
-                if (closestIdx > 0 && closestIdx < origLatLngs.length) {
-                    const remainingLatLngs = origLatLngs.slice(closestIdx).map(p => L.latLng(p.lat, p.lng));
-                    
-                    // Modifica a linha no mapa de forma limpa e otimizada
-                    if (line.setLatLngs) {
-                        line.setLatLngs(remainingLatLngs);
-                    }
+                // Apagamento Instantâneo da Linha de Rota que sobrou no espelho de retrovisor (slice limpo instantâneo)
+                if (closestIdx > 0) {
+                    line.setLatLngs(latLngs.slice(closestIdx));
                 }
-            } catch (err) {
-                // Previne eventuais erros silenciosos na renderização dinâmica da linha
-            }
+            } catch (err) {}
         }
 
         lucide.createIcons();
@@ -1852,7 +1895,7 @@
                 }
             }, 500);
 
-            // Foco nativo contínuo e ininterrupto na seta (Remoção total de cooldown ou timers que bloqueavam o loop)
+            // Foco centralizado imediato da seta: Redução brutal e extrema do Atraso Padrão (Ajuste para míseros 0.01s - instantâneo)
             const resetFocusTimer = () => {
                 userInteracting = true;
                 isFocusedMode = false;
@@ -1863,15 +1906,13 @@
             const startFocusTimer = () => {
                 clearTimeout(focusTimer);
                 focusTimer = setTimeout(() => {
-                    if (isNavigating) {
-                        userInteracting = false;
-                        isFocusedMode = true; // Força foco ininterrupto imediato após fim da interação manual
-                        if(interpolatedPos && map) {
-                            map.panTo(interpolatedPos, { animate: false });
-                        }
-                        updateVisionMode();
+                    userInteracting = false;
+                    isFocusedMode = true; // Retoma o foco ininterrupto e agressivo caso pare de manipular
+                    if(interpolatedPos && map) {
+                        map.panTo(interpolatedPos, { animate: false });
                     }
-                }, 1000); // Retorna o foco rapidamente e de forma constante
+                    updateVisionMode();
+                }, 10); // Extrema baixa latência em modo de espera para a centralização perfeita do mapa à seta de navegação
             };
 
             map.on('movestart dragstart touchstart mousedown wheel zoomstart', resetFocusTimer);
@@ -1886,16 +1927,14 @@
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
                 
-                // Lógica de desvio rápido e amortecimento ao reconectar sinal GPS ou corrigir posição
+                // Lógica de desvio rápido anti-teleporte ao reconectar sinal GPS ou corrigir posição errada da adivinhação
                 if (signalLostMode) {
                     signalLostMode = false;
                     const jumpDist = getDistance(interpolatedPos, coords);
-                    if (jumpDist > 150) {
-                        // Salto longo: desliza diretamente por cima de tudo para a coordenada real
-                        interpolatedPos = [coords[0], coords[1]];
-                    } else {
-                        // Salto curto: desliza progressivamente pelas ruas até o ponto real
-                        interpolatedPos = [interpolatedPos[0] + (coords[0] - interpolatedPos[0]) * 0.4, interpolatedPos[1] + (coords[1] - interpolatedPos[1]) * 0.4];
+                    if (jumpDist > 15) {
+                        // Salto brusco: O modo preditivo cometeu erro de cálculo na adivinhação
+                        window.isCorrectingPredictiveError = true;
+                        window.frozenRotation = rotation; // Trava a Rotação pra evitar trepidação 
                     }
                 }
                 lastGpsTimestamp = performance.now();
@@ -1941,7 +1980,7 @@
 
                 userPos = coords;
                 checkNearbyReports(coords);
-                animate(coords);
+                animate(coords); // Chama o renderizador que processará puramente apenas as rotações das setas visuais
                 
                 if (isNavigating) {
                     updateNavigation();
@@ -2048,17 +2087,17 @@
         }
 
         function animate(target) {
-            if (!userPos) { userPos = target; return; }
-            const start = userPos;
+            // Transformação do animate focada majoritariamente e unicamente nos cálculos dinâmicos limpos de Rotação Visuais.
+            if (!userPos) { return; }
+            const start = prevPos || userPos;
             const startTime = performance.now();
-            const duration = 250; // Transições rápidas e responsivas de renderização física
+            const duration = 250; 
             
             function frame(now) {
                 const p = Math.min((now - startTime) / duration, 1);
                 let currentLat = start[0] + (target[0] - start[0]) * p;
                 let currentLng = start[1] + (target[1] - start[1]) * p;
                 let dynamicRotation = rotation;
-                let finalCoords = [currentLat, currentLng];
 
                 if (isNavigating && routingControl && routingControl._selectedRoute) {
                     const coords = routingControl._selectedRoute.coordinates;
@@ -2069,7 +2108,6 @@
                         if (d < minDist) { minDist = d; closestIdx = i; }
                     }
                     if (minDist < 25) {
-                        finalCoords = [coords[closestIdx].lat, coords[closestIdx].lng];
                         const nextIdx = Math.min(closestIdx + 3, coords.length - 1);
                         if (nextIdx !== closestIdx) {
                             const p1 = coords[closestIdx];
@@ -2090,16 +2128,7 @@
                 }
                 
                 let diff = ((dynamicRotation - rotation) % 360 + 540) % 360 - 180;
-                rotation += diff * 0.45; // Amortecimento angular fluido
-                userPos = finalCoords;
-                
-                updateUserMarker(interpolatedPos || userPos, rotation, isNavigating);
-                
-                if (isNavigating && !userInteracting && isFocusedMode) {
-                    const exactPos = userMarker ? userMarker.getLatLng() : userPos;
-                    map.panTo(exactPos, { animate: false });
-                    updateVisionMode();
-                }
+                rotation += diff * 0.45; // Suavização pura de cálculos esféricos sem comprometer dados brutos de userPos
                 
                 if (p < 1) requestAnimationFrame(frame);
             }
