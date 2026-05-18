@@ -100,15 +100,12 @@
         }
         
         #map { 
-            /* Aumentado radicalmente para cobrir longas distâncias com o 3D sem deixar vazios pretos */
-            height: 300%; 
-            width: 300%; 
+            height: 100%; 
+            width: 100%; 
             position: absolute;
-            top: -100%;
-            left: -100%;
+            top: 0;
+            left: 0;
             z-index: 1; 
-            transform-style: preserve-3d;
-            will-change: transform;
         }
 
         .ui-container { position: absolute; left: 50%; transform: translateX(-50%); width: 92%; max-width: 420px; z-index: 2000; pointer-events: none; }
@@ -206,9 +203,6 @@
         .arrow-wrapper {
             width: 24px; height: 24px;
             max-width: 24px; max-height: 24px;
-            background: rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(8px);
-            border: 1.5px solid rgba(255, 255, 255, 0.6);
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -217,7 +211,6 @@
         
         .nav-arrow-svg {
             width: 14px; height: 14px;
-            fill: var(--accent);
             filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
         }
 
@@ -233,6 +226,7 @@
         #settings-panel {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95);
             z-index: 5000; padding: 30px;
+            overflow-y: auto;
         }
 
         #login-screen, #report-panel {
@@ -515,7 +509,7 @@
     <div id="proximity-alert-frame">
         <div class="black-minimal-card">
             <div class="flex items-center gap-5">
-                <div id="prox-icon-container" class="w-14 h-14 bg-zinc-900 rounded-2xl flex items-center justify-center overflow-hidden bg-size-contain bg-size-contain bg-no-repeat bg-center">
+                <div id="prox-icon-container" class="w-14 h-14 bg-zinc-900 rounded-2xl flex items-center justify-center overflow-hidden bg-size-contain bg-no-repeat bg-center">
                 </div>
                 <div class="flex-1">
                     <p id="prox-alert-text" class="text-white font-black text-lg leading-tight">Radar de Velocidade em 800m</p>
@@ -617,14 +611,6 @@
                 </select>
             </div>
             <div class="config-row">
-                <span>Visão</span>
-                <select id="cfg-vision" class="config-select" onchange="saveConfig()">
-                    <option value="auto">Automático</option>
-                    <option value="2d">2D</option>
-                    <option value="3d">3D</option>
-                </select>
-            </div>
-            <div class="config-row">
                 <span>Tamanho da Seta</span>
                 <select id="cfg-arrow-size" class="config-select" onchange="saveConfig()">
                     <option value="normal">Normal</option>
@@ -638,6 +624,89 @@
                     <option value="true">Ativado</option>
                     <option value="false">Desativado</option>
                 </select>
+            </div>
+            <!-- Novo botão de Personalização de Seta -->
+            <div class="settings-menu-item mt-6" onclick="openArrowCustomizer()">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="paint-brush" size="20" style="color: var(--accent);"></i>
+                    <span class="font-bold text-sm">Personalizar a seta</span>
+                </div>
+                <button class="bg-purple-600 text-white font-bold text-xs py-2 px-4 rounded-xl uppercase tracking-wider" style="background-color: var(--accent);">Personalizar</button>
+            </div>
+        </div>
+
+        <!-- Nova lista de Customização da Seta -->
+        <div id="list-custom-arrow" class="settings-list">
+            <div class="back-btn" onclick="closeArrowCustomizer()"><i data-lucide="arrow-left" size="16"></i> Voltar</div>
+            <h3 class="text-xs font-black uppercase text-zinc-500 mb-6 tracking-widest">Personalizar a Seta</h3>
+            
+            <!-- Visualização em Tempo Real do Marcador Customizado -->
+            <div class="flex justify-center items-center py-8 mb-6 bg-white/5 rounded-3xl border border-white/5 relative overflow-hidden">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05)_0%,transparent_70%)]"></div>
+                <div id="custom-arrow-preview-container" class="relative w-24 h-24 flex items-center justify-center">
+                    <!-- Gerado dinamicamente via JS -->
+                </div>
+            </div>
+
+            <!-- Controles Bolinha Transparente -->
+            <div class="bg-white/3 border border-white/5 rounded-3xl p-5 mb-5">
+                <h4 class="text-xs font-black uppercase tracking-widest text-purple-500 mb-4" style="color: var(--accent);">Bolinha de Fundo</h4>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-xs font-bold text-zinc-400 mb-2">
+                        <span>Transparência</span>
+                        <span id="preview-bg-opacity-val">0.25</span>
+                    </div>
+                    <input type="range" id="arrow-bg-opacity" min="0" max="1" step="0.05" value="0.25" oninput="updateArrowPreview()" class="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500" style="accent-color: var(--accent);">
+                </div>
+
+                <div class="mb-4">
+                    <span class="text-xs font-bold text-zinc-400 block mb-2">Material</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="arrow-mat-glass" onclick="setArrowMaterial('glass')" class="py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 bg-white/10 text-white">Vidro</button>
+                        <button id="arrow-mat-plastic" onclick="setArrowMaterial('plastic')" class="py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/5 bg-transparent text-zinc-500">Plástico</button>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="text-xs font-bold text-zinc-400 block mb-2">Cor da Bolinha</span>
+                    <div class="flex flex-wrap gap-2.5 justify-between">
+                        <button onclick="setArrowElementColor('bg', 'purple', '#A855F7')" class="w-8 h-8 rounded-full bg-[#A855F7] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Roxa"></button>
+                        <button onclick="setArrowElementColor('bg', 'green', '#22c55e')" class="w-8 h-8 rounded-full bg-[#22c55e] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Verde"></button>
+                        <button onclick="setArrowElementColor('bg', 'gray', '#71717a')" class="w-8 h-8 rounded-full bg-[#71717a] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Cinza"></button>
+                        <button onclick="setArrowElementColor('bg', 'pink', '#ec4899')" class="w-8 h-8 rounded-full bg-[#ec4899] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Rosa"></button>
+                        <button onclick="setArrowElementColor('bg', 'blue', '#3b82f6')" class="w-8 h-8 rounded-full bg-[#3b82f6] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Azul"></button>
+                        <button onclick="setArrowElementColor('bg', 'red', '#ef4444')" class="w-8 h-8 rounded-full bg-[#ef4444] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Vermelho"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controles Seta Central -->
+            <div class="bg-white/3 border border-white/5 rounded-3xl p-5 mb-6">
+                <h4 class="text-xs font-black uppercase tracking-widest text-purple-500 mb-4" style="color: var(--accent);">Seta Central</h4>
+                
+                <div class="mb-4">
+                    <span class="text-xs font-bold text-zinc-500 block mb-1 uppercase">Transparência & Material</span>
+                    <span class="text-[10px] text-zinc-500 italic block leading-normal">Propriedades travadas por segurança de segurança rodoviária de alto desempenho.</span>
+                </div>
+
+                <div>
+                    <span class="text-xs font-bold text-zinc-400 block mb-2">Cor da Seta</span>
+                    <div class="flex flex-wrap gap-2.5 justify-between">
+                        <button onclick="setArrowElementColor('fg', 'purple', '#A855F7')" class="w-8 h-8 rounded-full bg-[#A855F7] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Roxa"></button>
+                        <button onclick="setArrowElementColor('fg', 'green', '#22c55e')" class="w-8 h-8 rounded-full bg-[#22c55e] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Verde"></button>
+                        <button onclick="setArrowElementColor('fg', 'gray', '#71717a')" class="w-8 h-8 rounded-full bg-[#71717a] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Cinza"></button>
+                        <button onclick="setArrowElementColor('fg', 'pink', '#ec4899')" class="w-8 h-8 rounded-full bg-[#ec4899] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Rosa"></button>
+                        <button onclick="setArrowElementColor('fg', 'blue', '#3b82f6')" class="w-8 h-8 rounded-full bg-[#3b82f6] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Azul"></button>
+                        <button onclick="setArrowElementColor('fg', 'red', '#ef4444')" class="w-8 h-8 rounded-full bg-[#ef4444] border-2 border-transparent hover:scale-110 active:scale-95 transition-all" title="Vermelho"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ações Finais -->
+            <div class="flex flex-col gap-2.5 mb-12">
+                <button onclick="saveArrowCustomization()" class="w-full bg-white text-black font-extrabold text-sm py-4 rounded-2xl uppercase tracking-wider transition-all active:scale-98">Salvar</button>
+                <button onclick="resetArrowToDefault()" class="w-full bg-white/5 border border-white/10 text-zinc-400 font-extrabold text-xs py-3.5 rounded-2xl uppercase tracking-wider transition-all active:scale-98 hover:text-white">Voltar a seta pra padrão</button>
             </div>
         </div>
 
@@ -773,7 +842,7 @@
         let userPos = null, prevPos = null, destinationLatLng = null;
         let lastApiPos = null; 
         let rotation = 0, isNavigating = false, currentSpeed = 0, travelMode = 'car';
-        let userInteracting = false, interactionTimer = null;
+        let userInteracting = false;
         let lastRawInstruction = "";
         const synth = window.speechSynthesis;
 
@@ -789,12 +858,22 @@
         let lastGpsTimestamp = 0;
         let signalLostMode = false;
         let smoothAnimationId = null;
-        
-        let is3DModeActive = false; // Flag para monitorar transição de plugin 3d
+
+        // Configurações Estéticas da Seta (Nativa e Editada)
+        let arrowStyle = {
+            bgOpacity: 0.25,
+            bgMaterial: 'glass', // 'glass' ou 'plastic'
+            bgColor: '#A855F7',   // roxa default
+            bgName: 'purple',
+            fgColor: '#A855F7',   // roxa default
+            fgName: 'purple'
+        };
+
+        // Cache para edição em tempo real (antes de salvar)
+        let tempArrowStyle = { ...arrowStyle };
 
         let config = { 
             theme: 'auto', 
-            vision: 'auto', 
             pathAlgo: 'fast', 
             uiColor: 'purple',
             arrowSize: 'normal',
@@ -832,24 +911,6 @@
 
         const colorMap = { purple: '#A855F7', blue: '#3b82f6', green: '#22c55e', gray: '#71717a', red: '#ef4444' };
         
-        // --- PLUGIN 3D NATIVO: Extensão Leaflet para Perspectiva Estendida e Limpa ---
-        L.Perspective3D = L.Class.extend({
-            initialize: function(mapInstance) {
-                this._map = mapInstance;
-                this._container = mapInstance.getContainer();
-            },
-            enable3D: function() {
-                // Aumenta visão periférica e cria o efeito de câmera deitada limpando engasgos
-                this._container.style.transition = 'transform 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
-                this._container.style.transform = 'translateY(25%) rotateX(65deg)';
-            },
-            disable3D: function() {
-                // Retorna ao 2D padrão 
-                this._container.style.transition = 'transform 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
-                this._container.style.transform = 'rotateX(0deg) translateY(0%)';
-            }
-        });
-
         function setAppColor(color) {
             config.uiColor = color;
             document.documentElement.style.setProperty('--accent', colorMap[color]);
@@ -1541,10 +1602,15 @@
                 config = { ...config, ...parsed };
                 
                 if (document.getElementById('cfg-theme')) document.getElementById('cfg-theme').value = config.theme;
-                if (document.getElementById('cfg-vision')) document.getElementById('cfg-vision').value = config.vision;
                 if (document.getElementById('cfg-path-algo')) document.getElementById('cfg-path-algo').value = config.pathAlgo || 'fast';
                 if (document.getElementById('cfg-auto-zoom')) document.getElementById('cfg-auto-zoom').value = config.autoZoom || 'true';
                 if (document.getElementById('cfg-arrow-size')) document.getElementById('cfg-arrow-size').value = config.arrowSize || 'normal';
+            }
+
+            const savedArrow = localStorage.getItem('catsblock_arrow_style');
+            if (savedArrow) {
+                arrowStyle = { ...arrowStyle, ...JSON.parse(savedArrow) };
+                tempArrowStyle = { ...arrowStyle };
             }
             
             if (config.uiColor) {
@@ -1556,7 +1622,6 @@
 
         function saveConfig() {
             config.theme = document.getElementById('cfg-theme').value;
-            config.vision = document.getElementById('cfg-vision').value;
             config.pathAlgo = document.getElementById('cfg-path-algo').value;
             config.autoZoom = document.getElementById('cfg-auto-zoom').value;
             config.arrowSize = document.getElementById('cfg-arrow-size').value;
@@ -1600,47 +1665,132 @@
             }
         }
 
-        // Lógica Exaustiva e Blindada contra Glitches Visuais na Transição e Foco 3D
+        // Simplificado: Operação fixa e estável apenas em modo 2D padrão, removendo perspectiva 3D
         function updateVisionMode() {
-            if (!isNavigating || !map) {
-                if(is3DModeActive) {
-                    map.perspective3D.disable3D();
-                    is3DModeActive = false;
-                }
-                return; 
+            const mapEl = document.getElementById('map');
+            if (mapEl) {
+                mapEl.style.transform = 'none';
+                mapEl.style.transition = 'none';
             }
+        }
+
+        // --- Sistema de Personalização de Seta em Tempo Real ---
+        function openArrowCustomizer() {
+            tempArrowStyle = { ...arrowStyle };
+            document.getElementById('list-mapa').classList.remove('active');
+            document.getElementById('list-custom-arrow').classList.add('active');
             
-            let shouldBe3D = false;
+            // Preencher campos de input com valores atuais
+            document.getElementById('arrow-bg-opacity').value = tempArrowStyle.bgOpacity;
+            document.getElementById('preview-bg-opacity-val').innerText = tempArrowStyle.bgOpacity;
+            setArrowMaterial(tempArrowStyle.bgMaterial);
+            
+            updateArrowPreview();
+        }
 
-            // Restauração das lógicas base requisitadas
-            if (config.vision === '3d') {
-                shouldBe3D = true; // 3D força o modo permanentemente
-            } else if (config.vision === '2d') {
-                shouldBe3D = false; // 2D força o modo permanentemente
+        function closeArrowCustomizer() {
+            document.getElementById('list-custom-arrow').classList.remove('active');
+            document.getElementById('list-mapa').classList.add('active');
+        }
+
+        function setArrowMaterial(mat) {
+            tempArrowStyle.bgMaterial = mat;
+            const glassBtn = document.getElementById('arrow-mat-glass');
+            const plasticBtn = document.getElementById('arrow-mat-plastic');
+            
+            if (mat === 'glass') {
+                glassBtn.className = 'py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 bg-white/10 text-white';
+                plasticBtn.className = 'py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/5 bg-transparent text-zinc-500';
             } else {
-                // Modo automático Hysteresis (Impede que as velocidades 28-30km gerem saltos pisquentes frequentes na UI)
-                if (currentSpeed >= 30) {
-                    shouldBe3D = true;
-                } else if (currentSpeed < 25) {
-                    shouldBe3D = false;
-                } else {
-                    shouldBe3D = is3DModeActive; // Mantém a decisão prévia caso caia na velocidade limiar
-                }
+                plasticBtn.className = 'py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 bg-white/10 text-white';
+                glassBtn.className = 'py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/5 bg-transparent text-zinc-500';
+            }
+            updateArrowPreview();
+        }
+
+        function setArrowElementColor(element, colorName, hex) {
+            if (element === 'bg') {
+                tempArrowStyle.bgColor = hex;
+                tempArrowStyle.bgName = colorName;
+            } else {
+                tempArrowStyle.fgColor = hex;
+                tempArrowStyle.fgName = colorName;
+            }
+            updateArrowPreview();
+        }
+
+        function updateArrowPreview() {
+            const op = document.getElementById('arrow-bg-opacity').value;
+            tempArrowStyle.bgOpacity = parseFloat(op);
+            document.getElementById('preview-bg-opacity-val').innerText = op;
+            
+            const container = document.getElementById('custom-arrow-preview-container');
+            if (container) {
+                container.innerHTML = generateArrowMarkup(tempArrowStyle, 0, 'large');
+            }
+        }
+
+        function generateArrowMarkup(style, rot, sizeConfig) {
+            let arrowScales = { 'small': 0.7, 'normal': 1, 'large': 1.5 };
+            let activeScale = arrowScales[sizeConfig || 'normal'];
+            
+            // Lógica estética: material de vidro (translúcido com efeito de reflexo) ou plástico (opaco plano)
+            let materialCss = "";
+            let borderCss = `border: 1.5px solid rgba(255, 255, 255, 0.6);`;
+            
+            if (style.bgMaterial === 'glass') {
+                materialCss = `background: rgba(${hexToRgb(style.bgColor)}, ${style.bgOpacity}); backdrop-filter: blur(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.3);`;
+            } else {
+                materialCss = `background: rgba(${hexToRgb(style.bgColor)}, ${style.bgOpacity}); box-shadow: 0 4px 8px rgba(0,0,0,0.2);`;
             }
 
-            if (userInteracting) {
-                shouldBe3D = false;
-            }
+            return `
+                <div class="arrow-wrapper mx-auto" style="width: 32px; height: 32px; max-width: 32px; max-height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transform: scale(${activeScale}); ${materialCss} ${borderCss}">
+                    <svg class="nav-arrow-svg" style="width: 18px; height: 18px; fill: ${style.fgColor}; transform: rotate(${rot}deg); transition: none;" viewBox="0 0 100 100">
+                        <path d="M50 10 L85 85 L50 70 L15 85 Z"/>
+                    </svg>
+                </div>
+            `;
+        }
 
-            // O debounce evita a re-cálculo da transição em tempo real (removendo trepidações baseadas em rotação ou pitch flutuante)
-            if (shouldBe3D !== is3DModeActive) {
-                if (shouldBe3D) {
-                    map.perspective3D.enable3D();
-                } else {
-                    map.perspective3D.disable3D();
+        function hexToRgb(hex) {
+            // Auxiliar para lidar com cores RGB
+            let c;
+            if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                c = hex.substring(1).split('');
+                if(c.length == 3){
+                    c = [c[0], c[0], c[1], c[1], c[2], c[2]];
                 }
-                is3DModeActive = shouldBe3D;
+                c = '0x' + c.join('');
+                return [(c>>16)&255, (c>>8)&255, c&255].join(',');
             }
+            return '168,85,247'; // purple default fallback
+        }
+
+        function saveArrowCustomization() {
+            arrowStyle = { ...tempArrowStyle };
+            localStorage.setItem('catsblock_arrow_style', JSON.stringify(arrowStyle));
+            
+            if (userPos && map) {
+                updateUserMarker(interpolatedPos || userPos, window.frozenRotation || rotation, isNavigating);
+            }
+            closeArrowCustomizer();
+        }
+
+        function resetArrowToDefault() {
+            tempArrowStyle = {
+                bgOpacity: 0.25,
+                bgMaterial: 'glass',
+                bgColor: '#A855F7',
+                bgName: 'purple',
+                fgColor: '#A855F7',
+                fgName: 'purple'
+            };
+            
+            document.getElementById('arrow-bg-opacity').value = tempArrowStyle.bgOpacity;
+            document.getElementById('preview-bg-opacity-val').innerText = tempArrowStyle.bgOpacity;
+            setArrowMaterial(tempArrowStyle.bgMaterial);
+            updateArrowPreview();
         }
 
         async function translateText(text) {
@@ -1900,8 +2050,6 @@
                 keepBuffer: 18, 
                 updateWhenZooming: false
             }).setView(userPos, 19);
-            
-            map.perspective3D = new L.Perspective3D(map);
 
             // Transição suave de Visão baseada em alteração de Zoom
             map.on('zoomend', () => {
@@ -1937,28 +2085,30 @@
                 }
             }, 500);
 
-            // Foco centralizado imediato da seta: Redução brutal e extrema do Atraso Padrão (Ajuste para míseros 0.01s - instantâneo)
+            // Interrupção instantânea de centralização com temporizador inteligente de 5 segundos
             const resetFocusTimer = () => {
                 userInteracting = true;
                 isFocusedMode = false;
-                updateVisionMode();
                 clearTimeout(focusTimer);
-            };
-
-            const startFocusTimer = () => {
-                clearTimeout(focusTimer);
+                
+                // Reseta para zero e inicia nova contagem se tocado novamente antes do fim dos 5 segundos
                 focusTimer = setTimeout(() => {
                     userInteracting = false;
-                    isFocusedMode = true; // Retoma o foco ininterrupto e agressivo caso pare de manipular
+                    isFocusedMode = true; // Só retorna após 5 segundos completos sem nenhuma interação
                     if(interpolatedPos && map) {
                         map.panTo(interpolatedPos, { animate: false });
                     }
-                    updateVisionMode();
-                }, 10); // Extrema baixa latência em modo de espera para a centralização perfeita do mapa à seta de navegação
+                }, 5000);
+            };
+
+            const startFocusTimer = () => {
+                // Apenas inicia no ciclo de carregamento original
+                if (!focusTimer && isNavigating) {
+                    isFocusedMode = true;
+                }
             };
 
             map.on('movestart dragstart touchstart mousedown wheel zoomstart', resetFocusTimer);
-            map.on('moveend dragend touchend mouseup zoomend', startFocusTimer);
             startFocusTimer(); 
 
             // Ativa o loop contínuo de interpolação de movimento
@@ -2024,9 +2174,7 @@
                 checkNearbyReports(coords);
                 animate(coords); // Chama o renderizador que processará puramente apenas as rotações das setas visuais
                 
-                // Sempre que atualizar a velocidade, atualizamos a máquina de estados para evitar falhas visuais ao mudar pro modo automático do 3d
                 if (isNavigating) {
-                    updateVisionMode();
                     updateNavigation();
                 }
                 prevPos = coords;
@@ -2208,18 +2356,7 @@
             
             const inner = document.getElementById('marker-inner');
             if (inner) {
-                let arrowVisualRotation = rot;
-                
-                let arrowScales = { 'small': 0.7, 'normal': 1, 'large': 1.5 };
-                let activeScale = arrowScales[config.arrowSize || 'normal'];
-
-                inner.innerHTML = asArrow ? 
-                    `<div class="arrow-wrapper mx-auto mt-[8px]" style="transform: scale(${activeScale}); transition: transform 0.1s linear;">
-                        <svg class="nav-arrow-svg" style="transform: rotate(${arrowVisualRotation}deg); transition: none;" viewBox="0 0 100 100">
-                            <path d="M50 10 L85 85 L50 70 L15 85 Z"/>
-                        </svg>
-                    </div>` : 
-                    `<div class="marker-blue mx-auto mt-[16px]"></div>`;
+                inner.innerHTML = asArrow ? generateArrowMarkup(arrowStyle, rot, config.arrowSize) : `<div class="marker-blue mx-auto mt-[16px]"></div>`;
             }
                 
             userMarker.setLatLng(coords);
