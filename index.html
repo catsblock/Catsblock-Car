@@ -859,11 +859,18 @@
         let signalLostMode = false;
         let smoothAnimationId = null;
 
-        // Variáveis de Controle de Correção de Posição da Seta em Duas Etapas
-        let isCorrectingPredictiveError = false; // Etapa de Deslizamento Ativa
-        let isFreezeActive = false;             // Etapa de Congelamento de 0.5s Ativa
-        let frozenRotation = 0;                  // Ângulo salvo antes do deslizamento de correção
-        let freezeStartTime = 0;                 // Timestamp de início do congelamento
+        // Variáveis de Controle de Correção de Posição da Seta em Duas Etapas e Triggers de Recálculo
+        let isCorrectingPredictiveError = false; 
+        let isFreezeActive = false;             
+        let frozenRotation = 0;                  
+        let freezeStartTime = 0;
+        let offRouteCount = 0;
+        let simulatedTargetPos = null; // Target independente de movimentação para o GPS Anti-Engasgo
+        let lastTickTime = 0;
+
+        // Otimização de Renderização de Rota (Descarte Animado com Z-shift)
+        let fadingLinesLayer;
+        let lastClosestRouteIdx = 0;
 
         // Configurações Estéticas da Seta (Nativa e Editada)
         let arrowStyle = {
@@ -1417,7 +1424,6 @@
 
                 const d = getDistance(coords, [report.lat, report.lng]);
                 
-                // Dispara alertas na faixa ideal de antecedência (máximo 500m)
                 if (d <= 500) {
                     const isRelevant = checkReportRelevance(report);
                     if (isRelevant && d < minDist) {
@@ -1466,12 +1472,10 @@
                 alertaPassou = false;
                 alertasMostradosNestaViagem.add(report.id);
 
-                // Ocultação suave e completa do frame de viagem para dar prioridade total ao alerta
                 tripCard.classList.remove('active');
                 tripCard.style.opacity = '0';
                 tripCard.style.transform = 'translateX(-50%) translateY(100%)';
                 
-                // Ativação suave do card de aviso/alerta
                 frame.classList.add('active');
                 
                 speedUI.classList.add('ui-lift-active');
@@ -1514,7 +1518,6 @@
             }
         }
 
-        // Restaura suavemente o frame de informações de viagem após passar o alerta
         function closeProximityAlert() {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
@@ -1528,7 +1531,6 @@
             alertaFimTimeout = null;
 
             if (isNavigating) {
-                // Reaparecimento suave e elegante do frame de viagem
                 tripCard.classList.add('active');
                 tripCard.style.opacity = '1';
                 tripCard.style.transform = 'translateX(-50%) translateY(0)';
@@ -1671,7 +1673,6 @@
             }
         }
 
-        // Simplificado: Operação fixa e estável apenas em modo 2D padrão, removendo perspectiva 3D
         function updateVisionMode() {
             const mapEl = document.getElementById('map');
             if (mapEl) {
@@ -1680,13 +1681,11 @@
             }
         }
 
-        // --- Sistema de Personalização de Seta em Tempo Real ---
         function openArrowCustomizer() {
             tempArrowStyle = { ...arrowStyle };
             document.getElementById('list-mapa').classList.remove('active');
             document.getElementById('list-custom-arrow').classList.add('active');
             
-            // Preencher campos de input com valores atuais
             document.getElementById('arrow-bg-opacity').value = tempArrowStyle.bgOpacity;
             document.getElementById('preview-bg-opacity-val').innerText = tempArrowStyle.bgOpacity;
             setArrowMaterial(tempArrowStyle.bgMaterial);
@@ -1740,7 +1739,6 @@
             let arrowScales = { 'small': 0.7, 'normal': 1, 'large': 1.5 };
             let activeScale = arrowScales[sizeConfig || 'normal'];
             
-            // Lógica estética: material de vidro (translúcido com efeito de reflexo) ou plástico (opaco plano)
             let materialCss = "";
             let borderCss = `border: 1.5px solid rgba(255, 255, 255, 0.6);`;
             
@@ -1760,7 +1758,6 @@
         }
 
         function hexToRgb(hex) {
-            // Auxiliar para lidar com cores RGB
             let c;
             if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
                 c = hex.substring(1).split('');
@@ -1770,7 +1767,7 @@
                 c = '0x' + c.join('');
                 return [(c>>16)&255, (c>>8)&255, c&255].join(',');
             }
-            return '168,85,247'; // purple default fallback
+            return '168,85,247'; 
         }
 
         function saveArrowCustomization() {
@@ -1814,7 +1811,6 @@
             } catch (e) { document.getElementById('inst-text').innerText = text; }
         }
 
-        // Funções de Gerenciamento do Banner PWA (Adicionar à Tela Inicial)
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredInstallPrompt = e;
@@ -1853,7 +1849,6 @@
             dismissPwaPrompt(false);
         }
 
-        // Lógica de Minimização e Expansão do Card de Viagem Ativa
         function toggleTripMinimize(minimize) {
             const innerCard = document.getElementById('trip-card-inner');
             const nonNavGroup = document.getElementById('trip-non-nav-group');
@@ -1887,7 +1882,74 @@
             lucide.createIcons();
         }
 
-        // Sistema Waze Anti-Teleportes, Previsão de Falhas, e Continuidade Fluida em Qualquer Situação
+        // Funções Matemáticas Essenciais para Map Matching Strict (Regra 1)
+        function getClosestPointOnSegment(p, p1, p2) {
+            let x = p[0], y = p[1];
+            let x1 = p1[0], y1 = p1[1];
+            let x2 = p2[0], y2 = p2[1];
+            
+            let A = x - x1;
+            let B = y - y1;
+            let C = x2 - x1;
+            let D = y2 - y1;
+            
+            let dot = A * C + B * D;
+            let len_sq = C * C + D * D;
+            let param = -1;
+            if (len_sq !== 0) param = dot / len_sq;
+            
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; }
+            else if (param > 1) { xx = x2; yy = y2; }
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+            
+            return [xx, yy];
+        }
+
+        function snapToRoute(coords, routeCoords) {
+            let minDist = Infinity;
+            let snapped = coords;
+            let closestIdx = 0;
+            for(let i=0; i < routeCoords.length - 1; i++) {
+                let p1 = [routeCoords[i].lat, routeCoords[i].lng];
+                let p2 = [routeCoords[i+1].lat, routeCoords[i+1].lng];
+                let proj = getClosestPointOnSegment(coords, p1, p2);
+                let d = getDistance(coords, proj);
+                if (d < minDist) {
+                    minDist = d;
+                    snapped = proj;
+                    closestIdx = i;
+                }
+            }
+            return { snapped, minDist, closestIdx };
+        }
+
+        // Função preditiva estendida para GPS Anti-Engasgo
+        function projectAlongRoute(startPos, routeCoords, distMeters) {
+            let snap = snapToRoute(startPos, routeCoords);
+            let idx = snap.closestIdx;
+            let currentPt = snap.snapped;
+            let accumulated = 0;
+
+            for (let i = idx; i < routeCoords.length - 1; i++) {
+                let nextPt = [routeCoords[i+1].lat, routeCoords[i+1].lng];
+                let segDist = getDistance(currentPt, nextPt);
+                
+                if (accumulated + segDist >= distMeters) {
+                    let remaining = distMeters - accumulated;
+                    let ratio = remaining / segDist;
+                    return [
+                        currentPt[0] + (nextPt[0] - currentPt[0]) * ratio,
+                        currentPt[1] + (nextPt[1] - currentPt[1]) * ratio
+                    ];
+                }
+                accumulated += segDist;
+                currentPt = nextPt;
+            }
+            return currentPt; 
+        }
+
+        // Sistema Principal de Lógica de Movimentação Anti-Teleporte, Previsão Suave e Fade Line (Regras 2, 4 e 5)
         function smoothAnimationTick() {
             if (!userPos) {
                 smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
@@ -1895,81 +1957,75 @@
             }
 
             const now = performance.now();
+            let dt = now - lastTickTime;
+            lastTickTime = now;
+            if (dt > 100) dt = 16; // Restrição de framerate (evita saltos absurdos de clock)
+            
             const timePassed = now - lastGpsTimestamp;
 
-            // 1. REGRA 1: Comportamento em caso de queda de GPS (Se o sinal sumir por > 3s, congela completamente)
             if (timePassed > 3000) {
                 signalLostMode = true;
-                // Ela deve ficar completamente parada na última coordenada válida recebida, aguardando estrictamente a nova posição real.
-                if (isFocusedMode && !userInteracting) {
-                    map.panTo(interpolatedPos, { animate: false });
-                }
+                if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
                 smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
                 return;
             }
 
+            let targetPos = simulatedTargetPos || userPos;
+
             if (isNavigating) {
-                // Se o congelamento temporizado de 0.5s após a chegada da correção estiver ativo
                 if (isFreezeActive) {
                     const elapsedFreeze = now - freezeStartTime;
                     if (elapsedFreeze >= 500) {
-                        // Fim do congelamento: libera para corrigir a rotação suavemente
                         isFreezeActive = false;
                     } else {
-                        // Durante o congelamento: a seta fica na coordenada física e mantém a rotação travada
                         updateUserMarker(interpolatedPos, frozenRotation, true);
-                        if (isFocusedMode && !userInteracting) {
-                            map.panTo(interpolatedPos, { animate: false });
-                        }
+                        if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
                         smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
                         return;
                     }
                 }
 
-                // Lógica de deslize em caso de recuperação e detecção de Erro Preditivo
+                // Correção de Falsa Conversão ou Desvio Bruto - Mude a rotação de volta de forma lenta e suave, e desloque a posição (Regra 2)
                 if (isCorrectingPredictiveError) {
-                    // Etapa 1 (Deslocamento suave): desliza moderadamente até a nova coordenada real
-                    // Sem mudar a sua rotação, mantendo o ângulo que estava antes (frozenRotation)
-                    let distToReal = getDistance(interpolatedPos, userPos);
-                    let lerpFactor = 0.08; // velocidade moderada para o deslize de correção
+                    let distToReal = getDistance(interpolatedPos, targetPos);
+                    let lerpFactor = 0.04; 
 
                     interpolatedPos = [
-                        interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor,
-                        interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor
+                        interpolatedPos[0] + (targetPos[0] - interpolatedPos[0]) * lerpFactor,
+                        interpolatedPos[1] + (targetPos[1] - interpolatedPos[1]) * lerpFactor
                     ];
 
-                    updateUserMarker(interpolatedPos, frozenRotation, true);
+                    if (distToReal > 1) {
+                         let realAngle = Math.atan2(targetPos[1] - interpolatedPos[1], targetPos[0] - interpolatedPos[0]) * 180 / Math.PI;
+                         let diff = ((realAngle - rotation) % 360 + 540) % 360 - 180;
+                         rotation += diff * 0.03; 
+                    }
+
+                    updateUserMarker(interpolatedPos, rotation, true);
 
                     if (distToReal < 2.0) {
-                        // Chegou fisicamente na nova posição real. Inicia a Etapa 2 (Atraso e Rotação)
                         isCorrectingPredictiveError = false;
                         isFreezeActive = true;
                         freezeStartTime = performance.now();
+                        frozenRotation = rotation;
                     }
 
-                    if (isFocusedMode && !userInteracting) {
-                        map.panTo(interpolatedPos, { animate: false });
-                    }
+                    if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
 
                     smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
                     return;
                 }
 
-                // 2. REGRA 2: Lógica Preditiva de Rotação por Velocidade em Cruzamentos
-                // Verifica proximidade de ruas adjacentes no trajeto caso o usuário reduza substancialmente a velocidade
+                // Lógica de Movimentação Preditiva em Baixa Velocidade Sem Recálculo (Regra 2)
                 let nearIntersection = false;
                 let intersectionAngle = rotation;
+                let predictiveTarget = null;
 
                 if (currentSpeed < 15 && currentSpeed > 2 && routingControl && routingControl._selectedRoute) {
                     const pathCoords = routingControl._selectedRoute.coordinates;
-                    let closestIdx = 0;
-                    let minDist = Infinity;
-                    for (let i = 0; i < pathCoords.length; i++) {
-                        let d = getDistance(interpolatedPos, [pathCoords[i].lat, pathCoords[i].lng]);
-                        if (d < minDist) { minDist = d; closestIdx = i; }
-                    }
-
-                    // Se há uma curva acentuada à frente na rota planejada (até 25m de distância)
+                    const snapData = snapToRoute(interpolatedPos, pathCoords);
+                    let closestIdx = snapData.closestIdx;
+                    
                     const checkAheadIdx = Math.min(closestIdx + 4, pathCoords.length - 1);
                     if (checkAheadIdx !== closestIdx) {
                         const distToCurve = getDistance(interpolatedPos, [pathCoords[checkAheadIdx].lat, pathCoords[checkAheadIdx].lng]);
@@ -1977,97 +2033,128 @@
                             let angle = Math.atan2(pathCoords[checkAheadIdx].lng - pathCoords[closestIdx].lng, pathCoords[checkAheadIdx].lat - pathCoords[closestIdx].lat) * 180 / Math.PI;
                             let angleDiff = Math.abs(((angle - rotation) % 360 + 540) % 360 - 180);
                             
-                            if (angleDiff > 35) { // É uma conversão substancial no cruzamento
+                            if (angleDiff > 35) { 
                                 nearIntersection = true;
                                 intersectionAngle = angle;
+                                predictiveTarget = [pathCoords[checkAheadIdx].lat, pathCoords[checkAheadIdx].lng];
                             }
                         }
                     }
                 }
 
-                // Se houver detecção preditiva em cruzamento, altera suavemente a rotação mas congela e NÃO recala a rota até nova atualização real
                 if (nearIntersection) {
                     let diff = ((intersectionAngle - rotation) % 360 + 540) % 360 - 180;
-                    // Move ligeiramente e altera sua rotação de forma suave em direção a essa rua adjacente
                     rotation += diff * 0.04; 
 
-                    // Desloca sutilmente a coordenada visual em direção à rua adjacente (20% do caminho para dar efeito de inclinação suave)
-                    const pathCoords = routingControl._selectedRoute.coordinates;
-                    let closestIdx = 0;
-                    let minDist = Infinity;
-                    for (let i = 0; i < pathCoords.length; i++) {
-                        let d = getDistance(interpolatedPos, [pathCoords[i].lat, pathCoords[i].lng]);
-                        if (d < minDist) { minDist = d; closestIdx = i; }
-                    }
-                    const checkAheadIdx = Math.min(closestIdx + 4, pathCoords.length - 1);
-                    
                     interpolatedPos = [
-                        interpolatedPos[0] + (pathCoords[checkAheadIdx].lat - interpolatedPos[0]) * 0.02,
-                        interpolatedPos[1] + (pathCoords[checkAheadIdx].lng - interpolatedPos[1]) * 0.02
+                        interpolatedPos[0] + (predictiveTarget[0] - interpolatedPos[0]) * 0.015,
+                        interpolatedPos[1] + (predictiveTarget[1] - interpolatedPos[1]) * 0.015
                     ];
                 } else {
-                    // 5. REGRA 5: Movimentação independente anti-engasgo (Deslize 100% contínuo e fluido)
-                    let distToReal = getDistance(interpolatedPos, userPos);
-                    let lerpFactor = 0.05; // Fator de deslize de navegação contínua
+                    // Sistema Anti-Teleporte Contínuo (Regra 5): Deslize 100% contínuo e fluído independentemente do delay GPS.
+                    let activeTarget = targetPos;
+                    if (timePassed > 500 && currentSpeed > 2 && routingControl && routingControl._selectedRoute) {
+                        let mps = currentSpeed / 3.6;
+                        let extraDist = mps * ((timePassed - 500) / 1000);
+                        activeTarget = projectAlongRoute(targetPos, routingControl._selectedRoute.coordinates, extraDist);
+                    }
+
+                    let distToReal = getDistance(interpolatedPos, activeTarget);
+                    let lerpFactor = Math.min(dt * 0.003, 0.15); 
                     
                     interpolatedPos = [
-                        interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor,
-                        interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor
+                        interpolatedPos[0] + (activeTarget[0] - interpolatedPos[0]) * lerpFactor,
+                        interpolatedPos[1] + (activeTarget[1] - interpolatedPos[1]) * lerpFactor
                     ];
+
+                    if (distToReal > 1) {
+                         let realAngle = Math.atan2(activeTarget[1] - interpolatedPos[1], activeTarget[0] - interpolatedPos[0]) * 180 / Math.PI;
+                         let diff = ((realAngle - rotation) % 360 + 540) % 360 - 180;
+                         rotation += diff * 0.08;
+                    }
                 }
 
-                // 4. REGRA 4: Transição de Rotação Suave para as demais movimentações (eliminando giros bruscos)
                 updateUserMarker(interpolatedPos, rotation, true);
 
-                if (isFocusedMode && !userInteracting) {
-                    map.panTo(interpolatedPos, { animate: false });
-                }
+                if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
 
                 updatePathFadeEffect(interpolatedPos);
                 
             } else {
-                // Modo Bolinha: Continua a processar suavização e tracking sem travar o mapa, corrigindo o loop de celulares fracos
-                let distToReal = getDistance(interpolatedPos, userPos);
-                let lerpFactor = 0.08; 
+                let distToReal = getDistance(interpolatedPos, targetPos);
+                let lerpFactor = Math.min(dt * 0.004, 0.2);
                 interpolatedPos = [
-                    interpolatedPos[0] + (userPos[0] - interpolatedPos[0]) * lerpFactor,
-                    interpolatedPos[1] + (userPos[1] - interpolatedPos[1]) * lerpFactor
+                    interpolatedPos[0] + (targetPos[0] - interpolatedPos[0]) * lerpFactor,
+                    interpolatedPos[1] + (targetPos[1] - interpolatedPos[1]) * lerpFactor
                 ];
                 updateUserMarker(interpolatedPos, 0, false);
-                
-                if (isFocusedMode && !userInteracting) {
-                    map.panTo(interpolatedPos, { animate: false });
-                }
+                if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
             }
 
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
         }
 
-        // Lógica aprimorada de apagamento quase instantâneo do traçado conforme o carro avança na rota limpa
+        // Renderização Otimizada e Animação de Descarte Vertical de Linha de Rota (Regra 4)
+        function animateFadingLine(polyline, coords) {
+            let op = 0.5;
+            let offset = 0;
+            function step() {
+                op -= 0.025; 
+                offset += 0.000015; // Efeito vertical translúcido subindo
+                
+                if (op <= 0) {
+                    if (fadingLinesLayer && fadingLinesLayer.hasLayer(polyline)) fadingLinesLayer.removeLayer(polyline);
+                    return;
+                }
+                
+                polyline.setStyle({ opacity: op });
+                polyline.setLatLngs([
+                    [coords[0][0] + offset, coords[0][1]],
+                    [coords[1][0] + offset, coords[1][1]]
+                ]);
+                
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
         function updatePathFadeEffect(currentCoords) {
             if (!routingControl || !routingControl._selectedRoute || !routingControl._line) return;
-            
             try {
                 const line = routingControl._line;
-                let latLngs = line.getLatLngs();
-                if (!latLngs || latLngs.length < 2) return;
-                
-                let minDist = Infinity;
-                let closestIdx = 0;
-                
-                for (let i = 0; i < latLngs.length; i++) {
-                    let d = getDistance(currentCoords, [latLngs[i].lat, latLngs[i].lng]);
-                    if (d < minDist) {
-                        minDist = d;
-                        closestIdx = i;
+                const pathCoords = routingControl._selectedRoute.coordinates;
+                if (!pathCoords || pathCoords.length < 2) return;
+
+                const snapData = snapToRoute(currentCoords, pathCoords);
+                let closestIdx = snapData.closestIdx;
+                let exactPt = snapData.snapped;
+
+                if (closestIdx > lastClosestRouteIdx) {
+                    for (let i = lastClosestRouteIdx; i < closestIdx; i++) {
+                        if (i >= pathCoords.length - 1) break;
+                        let p1 = pathCoords[i];
+                        let p2 = pathCoords[i+1];
+                        
+                        let fadeLine = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], {
+                            color: getPathColor(),
+                            weight: 6,
+                            opacity: 0.5,
+                            className: 'fade-out-line'
+                        }).addTo(fadingLinesLayer);
+
+                        animateFadingLine(fadeLine, [[p1.lat, p1.lng], [p2.lat, p2.lng]]);
                     }
+                    lastClosestRouteIdx = closestIdx;
                 }
-                
-                // Apagamento Instantâneo da Linha de Rota que sobrou no espelho de retrovisor (slice limpo instantâneo)
-                if (closestIdx > 0) {
-                    line.setLatLngs(latLngs.slice(closestIdx));
+
+                // Renderiza puramente o trecho cortado exato no eixo central da seta
+                let remainingLatLngs = [L.latLng(exactPt[0], exactPt[1])];
+                for(let i = closestIdx + 1; i < pathCoords.length; i++) {
+                    remainingLatLngs.push(pathCoords[i]);
                 }
-            } catch (err) {}
+                line.setLatLngs(remainingLatLngs);
+
+            } catch(err) {}
         }
 
         lucide.createIcons();
@@ -2095,9 +2182,10 @@
         function init(lat, lng) {
             userPos = [lat, lng];
             interpolatedPos = [lat, lng];
+            simulatedTargetPos = [lat, lng];
+            lastTickTime = performance.now();
             if (map) return; 
 
-            // KeepBuffer incrementado brutalmente para 18 cobrindo de maneira segura o load the Tiles além da área visível no zoom 3D.
             map = L.map('map', { 
                 zoomControl: false, 
                 attributionControl: false, 
@@ -2109,7 +2197,6 @@
                 updateWhenZooming: false
             }).setView(userPos, 19);
 
-            // Transição suave de Visão baseada em alteração de Zoom
             map.on('zoomend', () => {
                 renderFilteredReports();
                 fetchAlerts();
@@ -2124,6 +2211,10 @@
             applyTheme();
             alertLayer = L.layerGroup().addTo(map);
             activeReportsLayer = L.layerGroup().addTo(map);
+            
+            if (!fadingLinesLayer) {
+                fadingLinesLayer = L.layerGroup().addTo(map);
+            }
 
             map.on('move zoom', () => {
                 map.eachLayer(layer => {
@@ -2143,16 +2234,14 @@
                 }
             }, 500);
 
-            // Interrupção instantânea de centralização com temporizador inteligente de 5 segundos
             const resetFocusTimer = () => {
                 userInteracting = true;
                 isFocusedMode = false;
                 clearTimeout(focusTimer);
                 
-                // Reseta para zero e inicia nova contagem se tocado novamente antes do fim dos 5 segundos
                 focusTimer = setTimeout(() => {
                     userInteracting = false;
-                    isFocusedMode = true; // Só retorna após 5 segundos completos sem nenhuma interação
+                    isFocusedMode = true; 
                     if(interpolatedPos && map) {
                         map.panTo(interpolatedPos, { animate: false });
                     }
@@ -2160,7 +2249,6 @@
             };
 
             const startFocusTimer = () => {
-                // Apenas inicia no ciclo de carregamento original
                 if (!focusTimer && isNavigating) {
                     isFocusedMode = true;
                 }
@@ -2169,7 +2257,6 @@
             map.on('movestart dragstart touchstart mousedown wheel zoomstart', resetFocusTimer);
             startFocusTimer(); 
 
-            // Ativa o loop contínuo de interpolação de movimento
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
 
             navigator.geolocation.watchPosition(pos => {
@@ -2177,28 +2264,48 @@
                 currentSpeed = Math.round((pos.coords.speed || 0) * 3.6);
                 document.getElementById('speed-val').innerText = currentSpeed;
                 
-                // 3. REGRA 3: Correção de Posição da Seta com Temporização e Rotação Postergada
-                // Detecta se a nova localização recebida contradiz de forma drástica o deslizamento
-                if (isNavigating) {
-                    const jumpDist = getDistance(interpolatedPos, coords);
-                    if (jumpDist > 15 && !isCorrectingPredictiveError && !isFreezeActive) {
-                        // Seta se posicionou ou virou na rua errada, inicia fluxo de correção
-                        isCorrectingPredictiveError = true;
-                        frozenRotation = rotation; // Trava rotação atual antes de deslocar
+                let isUserOnTrack = false;
+                
+                // Trava de Posicionamento Estrito na Via & Confirmação de Desvio Real (Regras 1 e 3)
+                if (isNavigating && routingControl && routingControl._selectedRoute) {
+                    const pathCoords = routingControl._selectedRoute.coordinates;
+                    const snapData = snapToRoute(coords, pathCoords);
+                    
+                    if (snapData.minDist <= 35) {
+                        isUserOnTrack = true;
+                        simulatedTargetPos = snapData.snapped; 
+                        offRouteCount = 0;
+                        if(isCorrectingPredictiveError === false && isFreezeActive === false && getDistance(interpolatedPos, simulatedTargetPos) > 15) {
+                            isCorrectingPredictiveError = true;
+                            frozenRotation = rotation;
+                        }
+                    } else {
+                        isUserOnTrack = false;
+                        simulatedTargetPos = coords;
+                        offRouteCount++;
                     }
+
+                    if (!isUserOnTrack && offRouteCount >= 2 && !isCorrectingPredictiveError && !isFreezeActive) {
+                        console.log("Recalculando rota por desvio de traçado confirmado...");
+                        let angle = Math.atan2(coords[1] - interpolatedPos[1], coords[0] - interpolatedPos[0]) * 180 / Math.PI;
+                        rotation = angle;
+                        interpolatedPos = [coords[0], coords[1]]; 
+                        setDest(destinationLatLng, L.latLng(coords));
+                        offRouteCount = 0;
+                    }
+                } else {
+                    simulatedTargetPos = coords;
                 }
 
                 signalLostMode = false;
                 lastGpsTimestamp = performance.now();
 
-                // Lógica de Zoom Automático baseada estritamente na nova escala (mínimo 16, máximo 20)
                 if (isNavigating && config.autoZoom === 'true') {
-                    let calculatedZoom = 20; // Inicia no limite máximo global de zoom em baixíssima velocidade
+                    let calculatedZoom = 20; 
                     
                     if (currentSpeed >= 20) {
-                        // Diminui proporcionalmente (-1 nível a cada 20km/h atingidos)
                         let speedLoss = Math.floor(currentSpeed / 20);
-                        calculatedZoom = Math.max(20 - speedLoss, 16); // Nunca cai abaixo de 16
+                        calculatedZoom = Math.max(20 - speedLoss, 16); 
                     }
                     
                     if (map.getZoom() !== calculatedZoom && !userInteracting) {
@@ -2206,25 +2313,6 @@
                     }
                 }
 
-                // Otimização do Recálculo de Rota (Disparado estritamente se o usuário desviar totalmente do traçado ativo)
-                if (isNavigating && routingControl && routingControl._selectedRoute) {
-                    const pathCoords = routingControl._selectedRoute.coordinates;
-                    let isUserOnTrack = false;
-                    for (let i = 0; i < pathCoords.length; i++) {
-                        const d = getDistance(coords, [pathCoords[i].lat, pathCoords[i].lng]);
-                        if (d <= 35) {
-                            isUserOnTrack = true;
-                            break;
-                        }
-                    }
-
-                    // Se o usuário entrou em outra rua ou se afastou, recalcula a rota uma única vez em background
-                    if (!isUserOnTrack && !isCorrectingPredictiveError && !isFreezeActive) {
-                        console.log("Recalculando rota por desvio de traçado...");
-                        setDest(destinationLatLng, L.latLng(coords));
-                    }
-                }
-                
                 if (!lastApiPos || getDistance(coords, lastApiPos) > 10) {
                     fetchAlerts();
                     lastApiPos = coords;
@@ -2232,7 +2320,7 @@
 
                 userPos = coords;
                 checkNearbyReports(coords);
-                animate(coords); // Chama o renderizador que processará puramente apenas as rotações das setas visuais
+                animate(coords); 
                 
                 if (isNavigating) {
                     updateNavigation();
@@ -2350,7 +2438,6 @@
                 let currentLng = start[1] + (target[1] - start[1]) * p;
                 let dynamicRotation = rotation;
 
-                // 4. REGRA 4: Física de Rotação Suave para todas as demais movimentações do sistema
                 if (isNavigating && routingControl && routingControl._selectedRoute) {
                     const coords = routingControl._selectedRoute.coordinates;
                     let closestIdx = 0;
@@ -2387,8 +2474,6 @@
                 }
                 
                 let diff = ((dynamicRotation - rotation) % 360 + 540) % 360 - 180;
-                
-                // Rotação suave sem solavancos
                 rotation += diff * 0.12; 
                 
                 if (p < 1) requestAnimationFrame(frame);
@@ -2451,6 +2536,9 @@
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
                 
+                lastClosestRouteIdx = 0;
+                if (fadingLinesLayer) fadingLinesLayer.clearLayers();
+
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
                 const ev = document.getElementById('extra-info-val');
@@ -2578,6 +2666,8 @@
             if (routingControl) map.removeControl(routingControl);
             if (destMarker) map.removeLayer(destMarker);
             if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
+            if (fadingLinesLayer) fadingLinesLayer.clearLayers();
+            lastClosestRouteIdx = 0;
             document.getElementById('trip-card').classList.remove('active');
             document.getElementById('speed-ui').classList.remove('ui-lift-active');
             document.getElementById('report-trigger-btn').classList.remove('ui-lift-active');
