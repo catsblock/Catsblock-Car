@@ -766,7 +766,7 @@
             </div>
             <div>
                 <p id="inst-dist" class="text-[10px] font-black opacity-80 uppercase tracking-widest">Aguardando...</p>
-                <p id="inst-text" class="text-xl font-black leading-tight">Siga o mapa</p>
+                <p id="inst-text" class="text-xl font-black leading-tight" data-translated="Siga o mapa">Siga o mapa</p>
             </div>
         </div>
 
@@ -850,39 +850,34 @@
         window.currentAuthUser = null;
         let lastSelectedReportId = null;
 
-        // Propriedades do PWA e Prompt de Tela Inicial
         let deferredInstallPrompt = null;
 
-        // Configuração de snap, interpolação preditiva e Waze GPS loss anti-teleporte
         let interpolatedPos = null; 
         let lastGpsTimestamp = 0;
         let signalLostMode = false;
         let smoothAnimationId = null;
 
-        // Variáveis de Controle de Correção de Posição da Seta em Duas Etapas e Triggers de Recálculo
         let isCorrectingPredictiveError = false; 
         let isFreezeActive = false;             
         let frozenRotation = 0;                  
         let freezeStartTime = 0;
         let offRouteCount = 0;
-        let simulatedTargetPos = null; // Target independente de movimentação para o GPS Anti-Engasgo
+        let simulatedTargetPos = null; 
         let lastTickTime = 0;
 
-        // Otimização de Renderização de Rota (Descarte Animado com Z-shift)
-        let fadingLinesLayer;
-        let lastClosestRouteIdx = 0;
+        let darkPurplePolyline = null;
+        let lastAnnouncedInstIndex = -1;
+        let lastAnnounced15mInstIndex = -1;
 
-        // Configurações Estéticas da Seta (Nativa e Editada)
         let arrowStyle = {
             bgOpacity: 0.25,
-            bgMaterial: 'glass', // 'glass' ou 'plastic'
-            bgColor: '#A855F7',   // roxa default
+            bgMaterial: 'glass', 
+            bgColor: '#A855F7',   
             bgName: 'purple',
-            fgColor: '#A855F7',   // roxa default
+            fgColor: '#A855F7',   
             fgName: 'purple'
         };
 
-        // Cache para edição em tempo real (antes de salvar)
         let tempArrowStyle = { ...arrowStyle };
 
         let config = { 
@@ -890,7 +885,7 @@
             pathAlgo: 'fast', 
             uiColor: 'purple',
             arrowSize: 'normal',
-            autoZoom: 'true', // Ativado por padrão
+            autoZoom: 'true',
             reports: {
                 'Polícia': { alert: true, show: true },
                 'Perigo': { alert: true, show: true },
@@ -1457,7 +1452,6 @@
             return false;
         }
 
-        // Sistema de alertas dinâmico com Ocultação Suave do Frame de Viagem
         function updateProximityAlertUI(report, dist) {
             const frame = document.getElementById('proximity-alert-frame');
             const tripCard = document.getElementById('trip-card');
@@ -1796,19 +1790,30 @@
             updateArrowPreview();
         }
 
-        async function translateText(text) {
-            if (!text || text === lastRawInstruction) return;
-            lastRawInstruction = text;
-            try {
-                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pt-BR`);
-                const data = await res.json();
-                const translated = data.responseData.translatedText;
-                document.getElementById('inst-text').innerText = translated;
+        async function translateText(text, speakIt = true) {
+            if (!text) return;
+            
+            if (text !== lastRawInstruction) {
+                lastRawInstruction = text;
+                try {
+                    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|pt-BR`);
+                    const data = await res.json();
+                    const translated = data.responseData.translatedText;
+                    document.getElementById('inst-text').innerText = translated;
+                    document.getElementById('inst-text').setAttribute('data-translated', translated);
+                } catch (e) { 
+                    document.getElementById('inst-text').innerText = text; 
+                    document.getElementById('inst-text').setAttribute('data-translated', text);
+                }
+            }
+            
+            if (speakIt) {
+                let translated = document.getElementById('inst-text').getAttribute('data-translated') || document.getElementById('inst-text').innerText;
                 const ut = new SpeechSynthesisUtterance(translated);
                 ut.lang = 'pt-BR';
                 synth.cancel();
                 synth.speak(ut);
-            } catch (e) { document.getElementById('inst-text').innerText = text; }
+            }
         }
 
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -1882,7 +1887,6 @@
             lucide.createIcons();
         }
 
-        // Funções Matemáticas Essenciais para Map Matching Strict (Regra 1)
         function getClosestPointOnSegment(p, p1, p2) {
             let x = p[0], y = p[1];
             let x1 = p1[0], y1 = p1[1];
@@ -1924,7 +1928,6 @@
             return { snapped, minDist, closestIdx };
         }
 
-        // Função preditiva estendida para GPS Anti-Engasgo
         function projectAlongRoute(startPos, routeCoords, distMeters) {
             let snap = snapToRoute(startPos, routeCoords);
             let idx = snap.closestIdx;
@@ -1949,7 +1952,6 @@
             return currentPt; 
         }
 
-        // Sistema Principal de Lógica de Movimentação Anti-Teleporte, Previsão Suave e Fade Line (Regras 2, 4 e 5)
         function smoothAnimationTick() {
             if (!userPos) {
                 smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
@@ -1959,7 +1961,7 @@
             const now = performance.now();
             let dt = now - lastTickTime;
             lastTickTime = now;
-            if (dt > 100) dt = 16; // Restrição de framerate (evita saltos absurdos de clock)
+            if (dt > 100) dt = 16; 
             
             const timePassed = now - lastGpsTimestamp;
 
@@ -1985,7 +1987,6 @@
                     }
                 }
 
-                // Correção de Falsa Conversão ou Desvio Bruto - Mude a rotação de volta de forma lenta e suave, e desloque a posição (Regra 2)
                 if (isCorrectingPredictiveError) {
                     let distToReal = getDistance(interpolatedPos, targetPos);
                     let lerpFactor = 0.04; 
@@ -2016,7 +2017,6 @@
                     return;
                 }
 
-                // Lógica de Movimentação Preditiva em Baixa Velocidade Sem Recálculo (Regra 2)
                 let nearIntersection = false;
                 let intersectionAngle = rotation;
                 let predictiveTarget = null;
@@ -2051,7 +2051,6 @@
                         interpolatedPos[1] + (predictiveTarget[1] - interpolatedPos[1]) * 0.015
                     ];
                 } else {
-                    // Sistema Anti-Teleporte Contínuo (Regra 5): Deslize 100% contínuo e fluído independentemente do delay GPS.
                     let activeTarget = targetPos;
                     if (timePassed > 500 && currentSpeed > 2 && routingControl && routingControl._selectedRoute) {
                         let mps = currentSpeed / 3.6;
@@ -2078,7 +2077,7 @@
 
                 if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
 
-                updatePathFadeEffect(interpolatedPos);
+                trimRouteLine(interpolatedPos);
                 
             } else {
                 let distToReal = getDistance(interpolatedPos, targetPos);
@@ -2094,31 +2093,7 @@
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
         }
 
-        // Renderização Otimizada e Animação de Descarte Vertical de Linha de Rota (Regra 4)
-        function animateFadingLine(polyline, coords) {
-            let op = 0.5;
-            let offset = 0;
-            function step() {
-                op -= 0.025; 
-                offset += 0.000015; // Efeito vertical translúcido subindo
-                
-                if (op <= 0) {
-                    if (fadingLinesLayer && fadingLinesLayer.hasLayer(polyline)) fadingLinesLayer.removeLayer(polyline);
-                    return;
-                }
-                
-                polyline.setStyle({ opacity: op });
-                polyline.setLatLngs([
-                    [coords[0][0] + offset, coords[0][1]],
-                    [coords[1][0] + offset, coords[1][1]]
-                ]);
-                
-                requestAnimationFrame(step);
-            }
-            requestAnimationFrame(step);
-        }
-
-        function updatePathFadeEffect(currentCoords) {
+        function trimRouteLine(currentCoords) {
             if (!routingControl || !routingControl._selectedRoute || !routingControl._line) return;
             try {
                 const line = routingControl._line;
@@ -2129,31 +2104,11 @@
                 let closestIdx = snapData.closestIdx;
                 let exactPt = snapData.snapped;
 
-                if (closestIdx > lastClosestRouteIdx) {
-                    for (let i = lastClosestRouteIdx; i < closestIdx; i++) {
-                        if (i >= pathCoords.length - 1) break;
-                        let p1 = pathCoords[i];
-                        let p2 = pathCoords[i+1];
-                        
-                        let fadeLine = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], {
-                            color: getPathColor(),
-                            weight: 6,
-                            opacity: 0.5,
-                            className: 'fade-out-line'
-                        }).addTo(fadingLinesLayer);
-
-                        animateFadingLine(fadeLine, [[p1.lat, p1.lng], [p2.lat, p2.lng]]);
-                    }
-                    lastClosestRouteIdx = closestIdx;
-                }
-
-                // Renderiza puramente o trecho cortado exato no eixo central da seta
                 let remainingLatLngs = [L.latLng(exactPt[0], exactPt[1])];
                 for(let i = closestIdx + 1; i < pathCoords.length; i++) {
                     remainingLatLngs.push(pathCoords[i]);
                 }
                 line.setLatLngs(remainingLatLngs);
-
             } catch(err) {}
         }
 
@@ -2211,10 +2166,6 @@
             applyTheme();
             alertLayer = L.layerGroup().addTo(map);
             activeReportsLayer = L.layerGroup().addTo(map);
-            
-            if (!fadingLinesLayer) {
-                fadingLinesLayer = L.layerGroup().addTo(map);
-            }
 
             map.on('move zoom', () => {
                 map.eachLayer(layer => {
@@ -2266,13 +2217,28 @@
                 
                 let isUserOnTrack = false;
                 
-                // Trava de Posicionamento Estrito na Via & Confirmação de Desvio Real (Regras 1 e 3)
                 if (isNavigating && routingControl && routingControl._selectedRoute) {
                     const pathCoords = routingControl._selectedRoute.coordinates;
                     const snapData = snapToRoute(coords, pathCoords);
                     
-                    if (snapData.minDist <= 35) {
-                        isUserOnTrack = true;
+                    isUserOnTrack = true;
+                    
+                    if (snapData.minDist > 35) {
+                        isUserOnTrack = false;
+                    } else if (snapData.minDist > 15 && prevPos) {
+                        let userAngle = Math.atan2(coords[1] - prevPos[1], coords[0] - prevPos[0]) * 180 / Math.PI;
+                        let pathPt1 = pathCoords[snapData.closestIdx];
+                        let pathPt2 = pathCoords[Math.min(snapData.closestIdx + 1, pathCoords.length - 1)];
+                        let pathAngle = Math.atan2(pathPt2.lng - pathPt1.lng, pathPt2.lat - pathPt1.lat) * 180 / Math.PI;
+                        
+                        let angleDiff = Math.abs(((userAngle - pathAngle) % 360 + 540) % 360 - 180);
+                        
+                        if (angleDiff > 40) {
+                            isUserOnTrack = false;
+                        }
+                    }
+
+                    if (isUserOnTrack) {
                         simulatedTargetPos = snapData.snapped; 
                         offRouteCount = 0;
                         if(isCorrectingPredictiveError === false && isFreezeActive === false && getDistance(interpolatedPos, simulatedTargetPos) > 15) {
@@ -2280,7 +2246,6 @@
                             frozenRotation = rotation;
                         }
                     } else {
-                        isUserOnTrack = false;
                         simulatedTargetPos = coords;
                         offRouteCount++;
                     }
@@ -2322,14 +2287,91 @@
                 checkNearbyReports(coords);
                 animate(coords); 
                 
-                if (isNavigating) {
-                    updateNavigation();
-                }
                 prevPos = coords;
             }, null, { enableHighAccuracy: true });
 
             map.on('click', (e) => { if(!isNavigating) setDest(e.latlng); });
         }
+
+        // Loop da Linha Roxa Escura Seguindo a Seta
+        setInterval(() => {
+            if (isNavigating && interpolatedPos) {
+                if (!darkPurplePolyline) {
+                    darkPurplePolyline = L.polyline([interpolatedPos], { color: '#3b0764', weight: 6, opacity: 1, zIndexOffset: 1000 }).addTo(map);
+                } else {
+                    let latlngs = darkPurplePolyline.getLatLngs();
+                    if (latlngs.length === 0) {
+                        darkPurplePolyline.addLatLng(interpolatedPos);
+                    } else {
+                        let lastPt = latlngs[latlngs.length - 1];
+                        if (getDistance(interpolatedPos, [lastPt.lat, lastPt.lng]) > 1.0) {
+                            darkPurplePolyline.addLatLng(interpolatedPos);
+                        }
+                    }
+                }
+            }
+        }, 50);
+
+        // Loop de Alertas de Caminho em Tempo Real
+        setInterval(() => {
+            if (isNavigating && routingControl && routingControl._selectedRoute && interpolatedPos) {
+                const route = routingControl._selectedRoute;
+                const pathCoords = route.coordinates;
+                const insts = route.instructions;
+                
+                const snapData = snapToRoute(interpolatedPos, pathCoords);
+                let closestIdx = snapData.closestIdx;
+                
+                let nextInst = null;
+                let nextInstIdx = -1;
+                
+                for (let i = 0; i < insts.length; i++) {
+                    if (insts[i].index > closestIdx) {
+                        nextInst = insts[i];
+                        nextInstIdx = i;
+                        break;
+                    }
+                }
+                
+                if (!nextInst && insts.length > 0) {
+                    nextInst = insts[insts.length - 1];
+                    nextInstIdx = insts.length - 1;
+                }
+                
+                if (nextInst) {
+                    let pathDist = 0;
+                    if (nextInst.index > closestIdx) {
+                        pathDist += getDistance(interpolatedPos, [pathCoords[closestIdx+1].lat, pathCoords[closestIdx+1].lng]);
+                        for (let i = closestIdx + 1; i < nextInst.index; i++) {
+                            pathDist += getDistance([pathCoords[i].lat, pathCoords[i].lng], [pathCoords[i+1].lat, pathCoords[i+1].lng]);
+                        }
+                    } else {
+                        pathDist = getDistance(interpolatedPos, [pathCoords[nextInst.index].lat, pathCoords[nextInst.index].lng]);
+                    }
+                    
+                    document.getElementById('inst-dist').innerText = `EM ${Math.round(pathDist)}m`;
+                    
+                    let newIconName = updateNavigationIcon(nextInst);
+                    const iconContainer = document.getElementById('inst-icon');
+                    if (iconContainer.getAttribute('data-current-icon') !== newIconName) {
+                        iconContainer.innerHTML = `<i data-lucide="${newIconName}" size="32"></i>`;
+                        iconContainer.setAttribute('data-current-icon', newIconName);
+                        lucide.createIcons();
+                    }
+                    
+                    if (lastAnnouncedInstIndex !== nextInstIdx) {
+                        lastAnnouncedInstIndex = nextInstIdx;
+                        lastAnnounced15mInstIndex = -1; 
+                        translateText(nextInst.text, false);
+                    }
+                    
+                    if (pathDist <= 15 && lastAnnounced15mInstIndex !== nextInstIdx) {
+                        lastAnnounced15mInstIndex = nextInstIdx;
+                        translateText(nextInst.text, true);
+                    }
+                }
+            }
+        }, 500);
 
         function getDistance(p1, p2) {
             const R = 6371e3;
@@ -2512,6 +2554,7 @@
             document.getElementById('report-trigger-btn').classList.add('ui-lift-active');
             
             if (routingControl) map.removeControl(routingControl);
+            if (darkPurplePolyline) { map.removeLayer(darkPurplePolyline); darkPurplePolyline = null; }
             
             let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
             const origin = forcedOrigin || L.latLng(userPos);
@@ -2536,8 +2579,8 @@
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
                 
-                lastClosestRouteIdx = 0;
-                if (fadingLinesLayer) fadingLinesLayer.clearLayers();
+                lastAnnouncedInstIndex = -1;
+                lastAnnounced15mInstIndex = -1;
 
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
                 document.getElementById('dest-name').innerText = "Destino Selecionado";
@@ -2588,7 +2631,7 @@
                 map.setZoom(19); 
                 updateVisionMode();
                 setDest(destinationLatLng); 
-                translateText("Iniciando navegação.");
+                translateText("Iniciando navegação.", true);
             } else { 
                 closeProximityAlert();
                 clearSelection(); 
@@ -2643,31 +2686,13 @@
             return iconName;
         }
 
-        function updateNavigation() {
-            if (!routingControl || !routingControl._selectedRoute) return;
-            const inst = routingControl._selectedRoute.instructions[0];
-            document.getElementById('inst-dist').innerText = `EM ${Math.round(inst.distance)}m`;
-            
-            let newIconName = updateNavigationIcon(inst);
-            const iconContainer = document.getElementById('inst-icon');
-            const currentIcon = iconContainer.getAttribute('data-current-icon');
-            
-            if (currentIcon !== newIconName) {
-                iconContainer.innerHTML = `<i data-lucide="${newIconName}" size="32"></i>`;
-                iconContainer.setAttribute('data-current-icon', newIconName);
-                lucide.createIcons();
-            }
-
-            translateText(inst.text);
-        }
-
         function clearSelection() {
             if (isNavigating) return;
             if (routingControl) map.removeControl(routingControl);
             if (destMarker) map.removeLayer(destMarker);
             if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
-            if (fadingLinesLayer) fadingLinesLayer.clearLayers();
-            lastClosestRouteIdx = 0;
+            if (darkPurplePolyline) { map.removeLayer(darkPurplePolyline); darkPurplePolyline = null; }
+            
             document.getElementById('trip-card').classList.remove('active');
             document.getElementById('speed-ui').classList.remove('ui-lift-active');
             document.getElementById('report-trigger-btn').classList.remove('ui-lift-active');
