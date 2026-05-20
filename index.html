@@ -766,7 +766,7 @@
             </div>
             <div>
                 <p id="inst-dist" class="text-[10px] font-black opacity-80 uppercase tracking-widest">Aguardando...</p>
-                <p id="inst-text" class="text-xl font-black leading-tight" data-translated="Siga o mapa">Siga o mapa</p>
+                <p id="inst-text" class="text-xl font-black leading-tight" data-translated="Siga o trajeto">Siga o trajeto</p>
             </div>
         </div>
 
@@ -866,7 +866,6 @@
         let lastTickTime = 0;
 
         let darkPurplePolyline = null;
-        let lastAnnouncedInstIndex = -1;
         let lastAnnounced15mInstIndex = -1;
 
         let arrowStyle = {
@@ -2076,8 +2075,6 @@
                 updateUserMarker(interpolatedPos, rotation, true);
 
                 if (isFocusedMode && !userInteracting) map.panTo(interpolatedPos, { animate: false });
-
-                trimRouteLine(interpolatedPos);
                 
             } else {
                 let distToReal = getDistance(interpolatedPos, targetPos);
@@ -2091,25 +2088,6 @@
             }
 
             smoothAnimationId = requestAnimationFrame(smoothAnimationTick);
-        }
-
-        function trimRouteLine(currentCoords) {
-            if (!routingControl || !routingControl._selectedRoute || !routingControl._line) return;
-            try {
-                const line = routingControl._line;
-                const pathCoords = routingControl._selectedRoute.coordinates;
-                if (!pathCoords || pathCoords.length < 2) return;
-
-                const snapData = snapToRoute(currentCoords, pathCoords);
-                let closestIdx = snapData.closestIdx;
-                let exactPt = snapData.snapped;
-
-                let remainingLatLngs = [L.latLng(exactPt[0], exactPt[1])];
-                for(let i = closestIdx + 1; i < pathCoords.length; i++) {
-                    remainingLatLngs.push(pathCoords[i]);
-                }
-                line.setLatLngs(remainingLatLngs);
-            } catch(err) {}
         }
 
         lucide.createIcons();
@@ -2167,6 +2145,12 @@
             alertLayer = L.layerGroup().addTo(map);
             activeReportsLayer = L.layerGroup().addTo(map);
 
+            if (!map.getPane('darkPurplePane')) {
+                map.createPane('darkPurplePane');
+                map.getPane('darkPurplePane').style.zIndex = 650;
+                map.getPane('darkPurplePane').style.pointerEvents = 'none';
+            }
+
             map.on('move zoom', () => {
                 map.eachLayer(layer => {
                     if (layer.redraw && (layer instanceof L.Polyline || layer instanceof L.Circle)) {
@@ -2223,9 +2207,9 @@
                     
                     isUserOnTrack = true;
                     
-                    if (snapData.minDist > 35) {
+                    if (snapData.minDist > 25) {
                         isUserOnTrack = false;
-                    } else if (snapData.minDist > 15 && prevPos) {
+                    } else if (snapData.minDist > 10 && prevPos) {
                         let userAngle = Math.atan2(coords[1] - prevPos[1], coords[0] - prevPos[0]) * 180 / Math.PI;
                         let pathPt1 = pathCoords[snapData.closestIdx];
                         let pathPt2 = pathCoords[Math.min(snapData.closestIdx + 1, pathCoords.length - 1)];
@@ -2233,7 +2217,7 @@
                         
                         let angleDiff = Math.abs(((userAngle - pathAngle) % 360 + 540) % 360 - 180);
                         
-                        if (angleDiff > 40) {
+                        if (angleDiff > 35) {
                             isUserOnTrack = false;
                         }
                     }
@@ -2293,26 +2277,33 @@
             map.on('click', (e) => { if(!isNavigating) setDest(e.latlng); });
         }
 
-        // Loop da Linha Roxa Escura Seguindo a Seta
         setInterval(() => {
-            if (isNavigating && interpolatedPos) {
+            if (isNavigating && interpolatedPos && routingControl && routingControl._selectedRoute) {
+                const pathCoords = routingControl._selectedRoute.coordinates;
+                const snapData = snapToRoute(interpolatedPos, pathCoords);
+                const snappedPos = snapData.snapped;
+
                 if (!darkPurplePolyline) {
-                    darkPurplePolyline = L.polyline([interpolatedPos], { color: '#3b0764', weight: 6, opacity: 1, zIndexOffset: 1000 }).addTo(map);
+                    darkPurplePolyline = L.polyline([snappedPos], { 
+                        color: '#3b0764', 
+                        weight: 6, 
+                        opacity: 1, 
+                        pane: 'darkPurplePane' 
+                    }).addTo(map);
                 } else {
                     let latlngs = darkPurplePolyline.getLatLngs();
                     if (latlngs.length === 0) {
-                        darkPurplePolyline.addLatLng(interpolatedPos);
+                        darkPurplePolyline.addLatLng(snappedPos);
                     } else {
                         let lastPt = latlngs[latlngs.length - 1];
-                        if (getDistance(interpolatedPos, [lastPt.lat, lastPt.lng]) > 1.0) {
-                            darkPurplePolyline.addLatLng(interpolatedPos);
+                        if (getDistance(snappedPos, [lastPt.lat, lastPt.lng]) > 1.0) {
+                            darkPurplePolyline.addLatLng(snappedPos);
                         }
                     }
                 }
             }
         }, 50);
 
-        // Loop de Alertas de Caminho em Tempo Real
         setInterval(() => {
             if (isNavigating && routingControl && routingControl._selectedRoute && interpolatedPos) {
                 const route = routingControl._selectedRoute;
@@ -2359,15 +2350,17 @@
                         lucide.createIcons();
                     }
                     
-                    if (lastAnnouncedInstIndex !== nextInstIdx) {
-                        lastAnnouncedInstIndex = nextInstIdx;
-                        lastAnnounced15mInstIndex = -1; 
-                        translateText(nextInst.text, false);
-                    }
-                    
-                    if (pathDist <= 15 && lastAnnounced15mInstIndex !== nextInstIdx) {
-                        lastAnnounced15mInstIndex = nextInstIdx;
-                        translateText(nextInst.text, true);
+                    if (pathDist <= 15) {
+                        if (lastAnnounced15mInstIndex !== nextInstIdx) {
+                            lastAnnounced15mInstIndex = nextInstIdx;
+                            translateText(nextInst.text, true);
+                        }
+                    } else {
+                        if (document.getElementById('inst-text').getAttribute('data-translated') !== "Siga o trajeto") {
+                            document.getElementById('inst-text').innerText = "Siga o trajeto";
+                            document.getElementById('inst-text').setAttribute('data-translated', "Siga o trajeto");
+                            lastRawInstruction = "";
+                        }
                     }
                 }
             }
@@ -2579,7 +2572,6 @@
                 const dKm = route.summary.totalDistance / 1000;
                 let estimatedMinutes = Math.ceil(route.summary.totalTime / 60);
                 
-                lastAnnouncedInstIndex = -1;
                 lastAnnounced15mInstIndex = -1;
 
                 document.getElementById('eta-val').innerText = estimatedMinutes < 1 ? "Agora" : estimatedMinutes + "m";
