@@ -2281,25 +2281,24 @@
             if (isNavigating && interpolatedPos && routingControl && routingControl._selectedRoute) {
                 const pathCoords = routingControl._selectedRoute.coordinates;
                 const snapData = snapToRoute(interpolatedPos, pathCoords);
+                const closestIdx = snapData.closestIdx;
                 const snappedPos = snapData.snapped;
 
+                let exactPathTrail = [];
+                for (let i = 0; i <= closestIdx; i++) {
+                    exactPathTrail.push([pathCoords[i].lat, pathCoords[i].lng]);
+                }
+                exactPathTrail.push(snappedPos);
+
                 if (!darkPurplePolyline) {
-                    darkPurplePolyline = L.polyline([snappedPos], { 
+                    darkPurplePolyline = L.polyline(exactPathTrail, { 
                         color: '#3b0764', 
                         weight: 6, 
                         opacity: 1, 
                         pane: 'darkPurplePane' 
                     }).addTo(map);
                 } else {
-                    let latlngs = darkPurplePolyline.getLatLngs();
-                    if (latlngs.length === 0) {
-                        darkPurplePolyline.addLatLng(snappedPos);
-                    } else {
-                        let lastPt = latlngs[latlngs.length - 1];
-                        if (getDistance(snappedPos, [lastPt.lat, lastPt.lng]) > 1.0) {
-                            darkPurplePolyline.addLatLng(snappedPos);
-                        }
-                    }
+                    darkPurplePolyline.setLatLngs(exactPathTrail);
                 }
             }
         }, 50);
