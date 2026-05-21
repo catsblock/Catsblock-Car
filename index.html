@@ -1100,14 +1100,28 @@
             
             if (isNavigating && !isMovingEnough) {
                 activeReportsLayer.clearLayers();
-                if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
+                if (slowTrafficPolyline) { 
+                    if (Array.isArray(slowTrafficPolyline)) {
+                        slowTrafficPolyline.forEach(p => { if(map.hasLayer(p)) map.removeLayer(p); });
+                    } else {
+                        if (map.hasLayer(slowTrafficPolyline)) map.removeLayer(slowTrafficPolyline);
+                    }
+                    slowTrafficPolyline = null; 
+                }
                 return; 
             }
 
             activeReportsLayer.clearLayers();
-            if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
+            if (slowTrafficPolyline) { 
+                if (Array.isArray(slowTrafficPolyline)) {
+                    slowTrafficPolyline.forEach(p => { if(map.hasLayer(p)) map.removeLayer(p); });
+                } else {
+                    if (map.hasLayer(slowTrafficPolyline)) map.removeLayer(slowTrafficPolyline);
+                }
+                slowTrafficPolyline = null; 
+            }
             
-            let highestTrafficSeverity = null;
+            let trafficReportsToDraw = [];
         
             const visibleReports = reportCache.filter(report => {
                 const reportCfg = config.reports[report.type] || { show: true };
@@ -1142,9 +1156,7 @@
 
             visibleReports.forEach(data => {
                 if (data.type === 'Trânsito') {
-                    if (data.subtype === 'Trânsito parado') highestTrafficSeverity = 'red';
-                    else if (data.subtype === 'Trânsito lento' && highestTrafficSeverity !== 'red') highestTrafficSeverity = 'orange';
-                    else if (data.subtype === 'Trânsito Normal' && !highestTrafficSeverity) highestTrafficSeverity = 'yellow';
+                    trafficReportsToDraw.push(data);
                 }
 
                 const distToUser = getDistance(userPos, [data.lat, data.lng]);
@@ -1179,9 +1191,48 @@
                 marker.addTo(activeReportsLayer);
             });
 
-            if (highestTrafficSeverity && routingControl && routingControl._selectedRoute) {
-                const coords = routingControl._selectedRoute.coordinates;
-                slowTrafficPolyline = L.polyline(coords, { color: highestTrafficSeverity, weight: 6, opacity: 0.9 }).addTo(activeReportsLayer);
+            if (trafficReportsToDraw.length > 0 && routingControl && routingControl._selectedRoute) {
+                slowTrafficPolyline = [];
+                const routeCoords = routingControl._selectedRoute.coordinates;
+                
+                trafficReportsToDraw.forEach(report => {
+                    let color = '#eab308';
+                    let maxDist = 275;
+                    if (report.subtype === 'Trânsito parado') {
+                        color = '#ef4444';
+                        maxDist = 750;
+                    } else if (report.subtype === 'Trânsito lento') {
+                        color = '#f97316';
+                        maxDist = 500;
+                    }
+                    
+                    let snap = snapToRoute([report.lat, report.lng], routeCoords);
+                    let idx = snap.closestIdx;
+                    let exactPt = snap.snapped;
+
+                    let segment = [L.latLng(exactPt[0], exactPt[1])];
+                    let accumulated = 0;
+                    let currentPt = exactPt;
+
+                    for (let i = idx; i >= 0; i--) {
+                        let nextPt = [routeCoords[i].lat, routeCoords[i].lng];
+                        let dist = getDistance(currentPt, nextPt);
+                        if (accumulated + dist >= maxDist) {
+                            let remaining = maxDist - accumulated;
+                            let ratio = remaining / dist;
+                            let endLat = currentPt[0] + (nextPt[0] - currentPt[0]) * ratio;
+                            let endLng = currentPt[1] + (nextPt[1] - currentPt[1]) * ratio;
+                            segment.unshift(L.latLng(endLat, endLng));
+                            break;
+                        }
+                        segment.unshift(L.latLng(nextPt[0], nextPt[1]));
+                        accumulated += dist;
+                        currentPt = nextPt;
+                    }
+
+                    let pl = L.polyline(segment, { color: color, weight: 6, opacity: 0.9 }).addTo(activeReportsLayer);
+                    slowTrafficPolyline.push(pl);
+                });
             }
             
             lucide.createIcons();
@@ -2681,7 +2732,14 @@
             if (isNavigating) return;
             if (routingControl) map.removeControl(routingControl);
             if (destMarker) map.removeLayer(destMarker);
-            if (slowTrafficPolyline) { map.removeLayer(slowTrafficPolyline); slowTrafficPolyline = null; }
+            if (slowTrafficPolyline) { 
+                if (Array.isArray(slowTrafficPolyline)) {
+                    slowTrafficPolyline.forEach(p => { if(map.hasLayer(p)) map.removeLayer(p); });
+                } else {
+                    if (map.hasLayer(slowTrafficPolyline)) map.removeLayer(slowTrafficPolyline);
+                }
+                slowTrafficPolyline = null; 
+            }
             if (darkPurplePolyline) { map.removeLayer(darkPurplePolyline); darkPurplePolyline = null; }
             
             document.getElementById('trip-card').classList.remove('active');
