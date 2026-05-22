@@ -2020,6 +2020,32 @@
             return '168,85,247'; 
         }
 
+        function saveArrowCustomization() {
+            arrowStyle = { ...tempArrowStyle };
+            localStorage.setItem('catsblock_arrow_style', JSON.stringify(arrowStyle));
+
+            if (userPos && map) {
+                updateUserMarker(interpolatedPos || userPos, frozenRotation || rotation, isNavigating);
+            }
+            closeArrowCustomizer();
+        }
+
+        function resetArrowToDefault() {
+            tempArrowStyle = {
+                bgOpacity: 0.25,
+                bgMaterial: 'glass',
+                bgColor: '#A855F7',
+                bgName: 'purple',
+                fgColor: '#A855F7',
+                fgName: 'purple'
+            };
+
+            document.getElementById('arrow-bg-opacity').value = tempArrowStyle.bgOpacity;
+            document.getElementById('preview-bg-opacity-val').innerText = tempArrowStyle.bgOpacity;
+            setArrowMaterial(tempArrowStyle.bgMaterial);
+            updateArrowPreview();
+        }
+
         async function translateText(text, speakIt = true) {
             if (!text) return;
             
