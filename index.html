@@ -15,6 +15,7 @@
     <title>CatsBlock Car</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -2019,32 +2020,6 @@
             return '168,85,247'; 
         }
 
-        function saveArrowCustomization() {
-            arrowStyle = { ...tempArrowStyle };
-            localStorage.setItem('catsblock_arrow_style', JSON.stringify(arrowStyle));
-            
-            if (userPos && map) {
-                updateUserMarker(interpolatedPos || userPos, frozenRotation || rotation, isNavigating);
-            }
-            closeArrowCustomizer();
-        }
-
-        function resetArrowToDefault() {
-            tempArrowStyle = {
-                bgOpacity: 0.25,
-                bgMaterial: 'glass',
-                bgColor: '#A855F7',
-                bgName: 'purple',
-                fgColor: '#A855F7',
-                fgName: 'purple'
-            };
-            
-            document.getElementById('arrow-bg-opacity').value = tempArrowStyle.bgOpacity;
-            document.getElementById('preview-bg-opacity-val').innerText = tempArrowStyle.bgOpacity;
-            setArrowMaterial(tempArrowStyle.bgMaterial);
-            updateArrowPreview();
-        }
-
         async function translateText(text, speakIt = true) {
             if (!text) return;
             
@@ -2818,13 +2793,13 @@
             if (routingControl) map.removeControl(routingControl);
             if (darkPurplePolyline) { map.removeLayer(darkPurplePolyline); darkPurplePolyline = null; }
             
-            let profileBase = { car: 'driving', uber: 'driving', bus: 'driving', bike: 'cycling', walk: 'foot' }[travelMode];
+            let profileBase = { car: 'driving-car', uber: 'driving-car', bus: 'driving-car', bike: 'cycling-regular', walk: 'foot-walking' }[travelMode] || 'driving-car';
             const origin = forcedOrigin || L.latLng(userPos);
 
             routingControl = L.Routing.control({
                 waypoints: [origin, latlng],
                 router: L.Routing.osrmv1({ 
-                    serviceUrl: `https://router.project-osrm.org/route/v1`, 
+                    serviceUrl: `https://router.project-osrm.org/route/v1`,
                     profile: profileBase
                 }),
                 lineOptions: { 
@@ -2859,6 +2834,8 @@
                 }
 
                 renderFilteredReports();
+            }).on('routingerror', err => {
+                console.error("Routing error:", err);
             }).addTo(map);
         }
 
